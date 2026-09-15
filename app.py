@@ -1,124 +1,139 @@
 from flask import Flask, request, jsonify
-
 from AnswerBuilder import AnswerBuilder
-
-
-# ============================================================
-# Mafiya AI Server
-# ============================================================
+import os
 
 app = Flask(__name__)
 
 
 # ============================================================
-# HEALTH CHECK
+# Mafiya AI
+# Health / Home
 # ============================================================
 
 @app.route("/", methods=["GET"])
 def home():
-
     return jsonify({
         "success": True,
         "service": "Mafiya AI",
         "status": "online"
-    })
+    }), 200
 
 
 # ============================================================
-# AI CHAT
+# Chat API
 # ============================================================
 
 @app.route("/api/chat", methods=["POST"])
 def chat():
-
     try:
+        # ----------------------------------------------------
+        # Read JSON
+        # ----------------------------------------------------
+        data = request.get_json(silent=True)
 
-        data = request.get_json(
-            silent=True
-        )
-
-        if not isinstance(data, dict):
-
+        if data is None:
             return jsonify({
                 "success": False,
                 "answer": "",
-                "error": "Invalid JSON request."
+                "error": "Request body must contain valid JSON."
             }), 400
 
+        if not isinstance(data, dict):
+            return jsonify({
+                "success": False,
+                "answer": "",
+                "error": "Invalid request format."
+            }), 400
 
-        message = data.get(
-            "message",
-            ""
-        )
+        # ----------------------------------------------------
+        # Message
+        # ----------------------------------------------------
+        message = data.get("message", "")
 
-        prompt = data.get(
-            "prompt",
-            ""
-        )
-
-        attachments = data.get(
-            "attachments",
-            []
-        )
-
+        if message is None:
+            message = ""
 
         if not isinstance(message, str):
-
             message = str(message)
 
+        message = message.strip()
+
+        if not message:
+            return jsonify({
+                "success": False,
+                "answer": "",
+                "error": "Message cannot be empty."
+            }), 400
+
+        # ----------------------------------------------------
+        # Optional prompt
+        # ----------------------------------------------------
+        prompt = data.get("prompt", "")
+
+        if prompt is None:
+            prompt = ""
 
         if not isinstance(prompt, str):
-
             prompt = str(prompt)
 
+        prompt = prompt.strip()
 
-        if not isinstance(attachments, list):
+        # ----------------------------------------------------
+        # Optional attachments
+        # ----------------------------------------------------
+        attachments = data.get("attachments", [])
 
+        if attachments is None:
             attachments = []
 
+        if not isinstance(attachments, list):
+            attachments = []
 
-        # ====================================================
-        # AI REQUEST
-        #
-        # AnswerBuilder.py-ই একমাত্র AI answer system।
-        # ====================================================
-
-        result = AnswerBuilder.generate_answer(
+        # ----------------------------------------------------
+        # Generate AI answer
+        # ----------------------------------------------------
+        answer = AnswerBuilder.generate_answer(
             message=message,
             prompt=prompt,
             attachments=attachments
         )
 
-
-        if result is None:
-
+        # ----------------------------------------------------
+        # Validate answer
+        # ----------------------------------------------------
+        if answer is None:
             return jsonify({
                 "success": False,
                 "answer": "",
                 "error": "AI returned no answer."
             }), 500
 
-
-        answer = str(result).strip()
-
+        answer = str(answer).strip()
 
         if not answer:
-
             return jsonify({
                 "success": False,
                 "answer": "",
                 "error": "AI returned an empty answer."
             }), 500
 
-
+        # ----------------------------------------------------
+        # Success
+        # ----------------------------------------------------
         return jsonify({
             "success": True,
             "answer": answer,
             "error": ""
-        })
-
+        }), 200
 
     except Exception as error:
+        # ----------------------------------------------------
+        # Server error
+        # ----------------------------------------------------
+        print(
+            "Mafiya AI /api/chat ERROR:",
+            repr(error)
+        )
 
         return jsonify({
             "success": False,
@@ -128,21 +143,32 @@ def chat():
 
 
 # ============================================================
-# RUN SERVER
+# Optional OPTIONS support
+# ============================================================
+
+@app.route("/api/chat", methods=["OPTIONS"])
+def chat_options():
+    return jsonify({
+        "success": True
+    }), 200
+
+
+# ============================================================
+# Run locally
+# Render uses Gunicorn:
+# gunicorn app:app
 # ============================================================
 
 if __name__ == "__main__":
-
-    import os
-
     port = int(
         os.environ.get(
             "PORT",
-            10000
+            "10000"
         )
     )
 
     app.run(
         host="0.0.0.0",
-        port=port
+        port=port,
+        debug=False
     )
