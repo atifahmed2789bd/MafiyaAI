@@ -1,0 +1,612 @@
+import sqlite3
+import os
+import re
+from datetime import datetime
+
+
+# ============================================================
+# Mafiya AI Persistent Memory
+# ============================================================
+
+BASE_DIR = os.path.dirname(
+    os.path.abspath(__file__)
+)
+
+DATABASE_PATH = os.path.join(
+    BASE_DIR,
+    "mafiya_memory.db"
+)
+
+
+# ============================================================
+# Database Connection
+# ============================================================
+
+def get_connection():
+    connection = sqlite3.connect(
+        DATABASE_PATH,
+        timeout=30
+    )
+
+    connection.row_factory = sqlite3.Row
+
+    return connection
+
+
+# ============================================================
+# Initialize Database
+# ============================================================
+
+def initialize_memory():
+    """
+    Mafiya AI memory database তৈরি করে।
+
+    - কোনো automatic deletion নেই
+    - কোনো fixed storage message limit নেই
+    - পুরোনো conversation নিজে থেকে মুছে যাবে না
+    """
+
+    connection = get_connection()
+
+    try:
+        connection.execute(
+            """
+            CREATE TABLE IF NOT EXISTS conversation (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                role TEXT NOT NULL,
+                content TEXT NOT NULL,
+                created_at TEXT NOT NULL
+            )
+            """
+        )
+
+        connection.execute(
+            """
+            CREATE INDEX IF NOT EXISTS
+            idx_conversation_created_at
+            ON conversation(created_at)
+            """
+        )
+
+        connection.commit()
+
+    finally:
+        connection.close()
+
+
+# ============================================================
+# Save Message
+# ============================================================
+
+def save_message(role, content):
+    """
+    User অথবা AI message memory-তে সংরক্ষণ করে।
+    """
+
+    if not isinstance(role, str):
+        return False
+
+    if not isinstance(content, str):
+        return False
+
+    role = role.strip().lower()
+    content = content.strip()
+
+    if not role or not content:
+        return False
+
+    allowed_roles = {
+        "user",
+        "assistant",
+        "system"
+    }
+
+    if role not in allowed_roles:
+        return False
+
+    initialize_memory()
+
+    connection = get_connection()
+
+    try:
+        connection.execute(
+            """
+            INSERT INTO conversation
+            (
+                role,
+                content,
+                created_at
+            )
+            VALUES (?, ?, ?)
+            """,
+            (
+                role,
+                content,
+                datetime.now().isoformat(
+                    timespec="seconds"
+                )
+            )
+        )
+
+        connection.commit()
+
+        return True
+
+    finally:
+        connection.close()
+
+
+# ============================================================
+# User Message
+# ============================================================
+
+def add_user_message(content):
+    return save_message(
+        "user",
+        content
+    )
+
+
+# ============================================================
+# Assistant Message
+# ============================================================
+
+def add_assistant_message(content):
+    return save_message(
+        "assistant",
+        content
+    )
+
+
+# ============================================================
+# Keyword Extraction
+# ============================================================
+
+def extract_keywords(text):
+    """
+    Search করার জন্য গুরুত্বপূর্ণ শব্দ বের করে।
+    """
+
+    if not isinstance(text, str):
+        return []
+
+    words = re.findall(
+        r"[A-Za-z0-9\u0980-\u09FF]+",
+        text.lower()
+    )
+
+    stop_words = {
+        # Bengali
+        "আমি",
+        "আমার",
+        "আমাকে",
+        "আমরা",
+        "আমাদের",
+        "তুমি",
+        "তোমার",
+        "তোমাকে",
+        "তোমরা",
+        "তোমাদের",
+        "আপনি",
+        "আপনার",
+        "আপনাকে",
+        "এই",
+        "ওই",
+        "সেই",
+        "এটা",
+        "ওটা",
+        "সেটা",
+        "কি",
+        "কী",
+        "কেন",
+        "কিভাবে",
+        "কীভাবে",
+        "কোন",
+        "কোনো",
+        "একটা",
+        "একটি",
+        "এবং",
+        "আর",
+        "ও",
+        "এর",
+        "তে",
+        "কে",
+        "না",
+        "হয়",
+        "হয়",
+        "হবে",
+        "ছিল",
+        "আছে",
+        "আছি",
+        "আছেন",
+        "দাও",
+        "দেও",
+        "করো",
+        "করতে",
+        "করে",
+        "করেছে",
+        "করেছেন",
+        "করব",
+        "করবো",
+        "জন্য",
+        "সাথে",
+        "থেকে",
+        "যে",
+        "যা",
+        "যদি",
+        "তাহলে",
+        "কিন্তু",
+        "তবে",
+        "আরও",
+
+        # English
+        "the",
+        "a",
+        "an",
+        "and",
+        "or",
+        "is",
+        "are",
+        "am",
+        "was",
+        "were",
+        "to",
+        "of",
+        "in",
+        "on",
+        "for",
+        "with",
+        "this",
+        "that",
+        "these",
+        "those",
+        "what",
+        "why",
+        "how",
+        "when",
+        "where",
+        "who",
+        "which",
+        "my",
+        "your",
+        "you",
+        "yourself",
+        "i",
+        "we",
+        "they",
+        "he",
+        "she",
+        "it",
+        "me",
+        "us",
+        "them",
+        "do",
+        "does",
+        "did",
+        "can",
+        "could",
+        "will",
+        "would",
+        "should",
+        "have",
+        "has",
+        "had",
+        "be",
+        "been",
+        "being",
+        "from",
+        "as",
+        "at",
+        "by",
+        "about",
+        "into",
+        "please"
+    }
+
+    keywords = []
+
+    for word in words:
+
+        if word in stop_words:
+            continue
+
+        if len(word) < 2:
+            continue
+
+        if word not in keywords:
+            keywords.append(word)
+
+    return keywords
+
+
+# ============================================================
+# Format Memory
+# ============================================================
+
+def format_memory_rows(rows):
+    """
+    Database rows-কে AI-readable text-এ রূপান্তর করে।
+    """
+
+    if not rows:
+        return ""
+
+    result = []
+
+    for row in rows:
+
+        role = row["role"]
+
+        if role == "user":
+            role_name = "User"
+
+        elif role == "assistant":
+            role_name = "Mafiya AI"
+
+        elif role == "system":
+            role_name = "System"
+
+        else:
+            role_name = role
+
+        result.append(
+            f"{role_name}: {row['content']}"
+        )
+
+    return "\n".join(result)
+
+
+# ============================================================
+# Relevant Memory
+# ============================================================
+
+def get_relevant_memory(
+    query,
+    max_results=12
+):
+    """
+    বর্তমান প্রশ্নের সাথে সম্পর্কিত পুরোনো
+    conversation খুঁজে বের করে।
+
+    max_results শুধু retrieval limit।
+    Database storage limit নয়।
+    """
+
+    if not isinstance(query, str):
+        return ""
+
+    query = query.strip()
+
+    if not query:
+        return ""
+
+    initialize_memory()
+
+    keywords = extract_keywords(query)
+
+    if not keywords:
+        return ""
+
+    try:
+        max_results = int(max_results)
+
+    except (
+        TypeError,
+        ValueError
+    ):
+        max_results = 12
+
+    if max_results < 1:
+        max_results = 1
+
+    connection = get_connection()
+
+    try:
+
+        conditions = []
+        parameters = []
+
+        for keyword in keywords:
+
+            conditions.append(
+                "LOWER(content) LIKE ?"
+            )
+
+            parameters.append(
+                "%" +
+                keyword.lower() +
+                "%"
+            )
+
+        if not conditions:
+            return ""
+
+        where_clause = " OR ".join(
+            conditions
+        )
+
+        rows = connection.execute(
+            f"""
+            SELECT
+                id,
+                role,
+                content,
+                created_at
+            FROM conversation
+            WHERE {where_clause}
+            ORDER BY id DESC
+            LIMIT ?
+            """,
+            parameters + [
+                max_results
+            ]
+        ).fetchall()
+
+        if not rows:
+            return ""
+
+        rows = list(
+            reversed(rows)
+        )
+
+        return format_memory_rows(rows)
+
+    finally:
+        connection.close()
+
+
+# ============================================================
+# Complete Memory
+# ============================================================
+
+def get_all_memory_text():
+    """
+    সম্পূর্ণ conversation history ফেরত দেয়।
+
+    Database-এর কোনো fixed message limit নেই।
+    """
+
+    initialize_memory()
+
+    connection = get_connection()
+
+    try:
+
+        rows = connection.execute(
+            """
+            SELECT
+                role,
+                content,
+                created_at
+            FROM conversation
+            ORDER BY id ASC
+            """
+        ).fetchall()
+
+        if not rows:
+            return ""
+
+        return format_memory_rows(rows)
+
+    finally:
+        connection.close()
+
+
+# ============================================================
+# Recent Memory
+# ============================================================
+
+def get_recent_memory(limit=12):
+    """
+    সর্বশেষ conversation entry ফেরত দেয়।
+
+    এটি storage limit নয়।
+    """
+
+    initialize_memory()
+
+    try:
+        limit = int(limit)
+
+    except (
+        TypeError,
+        ValueError
+    ):
+        limit = 12
+
+    if limit < 1:
+        limit = 1
+
+    connection = get_connection()
+
+    try:
+
+        rows = connection.execute(
+            """
+            SELECT
+                role,
+                content,
+                created_at
+            FROM conversation
+            ORDER BY id DESC
+            LIMIT ?
+            """,
+            (limit,)
+        ).fetchall()
+
+        if not rows:
+            return ""
+
+        rows = list(
+            reversed(rows)
+        )
+
+        return format_memory_rows(rows)
+
+    finally:
+        connection.close()
+
+
+# ============================================================
+# Memory Count
+# ============================================================
+
+def get_memory_count():
+    """
+    মোট memory entry-এর সংখ্যা ফেরত দেয়।
+    """
+
+    initialize_memory()
+
+    connection = get_connection()
+
+    try:
+
+        row = connection.execute(
+            """
+            SELECT COUNT(*) AS total
+            FROM conversation
+            """
+        ).fetchone()
+
+        return int(
+            row["total"]
+        )
+
+    finally:
+        connection.close()
+
+
+# ============================================================
+# Clear Memory
+# ============================================================
+
+def clear_memory():
+    """
+    শুধুমাত্র explicitভাবে call করলে
+    সম্পূর্ণ memory মুছে যাবে।
+    """
+
+    initialize_memory()
+
+    connection = get_connection()
+
+    try:
+
+        connection.execute(
+            """
+            DELETE FROM conversation
+            """
+        )
+
+        connection.commit()
+
+    finally:
+        connection.close()
+
+
+# ============================================================
+# Initialize When Imported
+# ============================================================
+
+initialize_memory()

@@ -5,6 +5,14 @@ from typing import Optional, Callable, Any
 import google.generativeai as genai
 
 from config import config
+from MemoryManager import (
+    add_user_message,
+    add_assistant_message,
+    get_relevant_memory,
+    get_all_memory_text,
+    get_memory_count,
+    clear_memory
+)
 
 
 # ============================================================
@@ -13,7 +21,7 @@ from config import config
 
 class AnswerBuilder:
 
-    _memory_manager = None
+    _initialized = False
 
     # ========================================================
     # INITIALIZE
@@ -22,20 +30,12 @@ class AnswerBuilder:
     @classmethod
     def initialize(cls, context: Any = None):
 
-        if cls._memory_manager is None:
-
-            cls._memory_manager = MemoryManager(
-                context
-            )
-
-        # ----------------------------------------------------
-        # Gemini API configuration
-        # ----------------------------------------------------
+        if cls._initialized:
+            return
 
         api_key = config.GEMINI_API_KEY
 
         if not api_key:
-
             raise RuntimeError(
                 "GEMINI_API_KEY is not configured."
             )
@@ -43,6 +43,8 @@ class AnswerBuilder:
         genai.configure(
             api_key=api_key
         )
+
+        cls._initialized = True
 
     # ========================================================
     # BUILD - TEXT ONLY
@@ -88,20 +90,18 @@ class AnswerBuilder:
 
             return
 
-        if cls._memory_manager is None:
+        try:
 
-            try:
+            cls.initialize()
 
-                cls.initialize()
+        except Exception as error:
 
-            except Exception as error:
+            cls._send_error(
+                callback,
+                cls.safe_error(error)
+            )
 
-                cls._send_error(
-                    callback,
-                    cls.safe_error(error)
-                )
-
-                return
+            return
 
         message = ai_request.get_message()
 
@@ -152,16 +152,6 @@ class AnswerBuilder:
             message = message.strip()
 
             # ------------------------------------------------
-            # USER MEMORY
-            # ------------------------------------------------
-
-            if message:
-
-                cls._memory_manager.add_user_message(
-                    message
-                )
-
-            # ------------------------------------------------
             # MASTER PROMPT
             # ------------------------------------------------
 
@@ -194,10 +184,16 @@ class AnswerBuilder:
             answer = answer.strip()
 
             # ------------------------------------------------
-            # AI MEMORY
+            # SAVE MEMORY
             # ------------------------------------------------
 
-            cls._memory_manager.add_assistant_message(
+            if message:
+
+                add_user_message(
+                    message
+                )
+
+            add_assistant_message(
                 answer
             )
 
@@ -233,17 +229,27 @@ class AnswerBuilder:
 
         cls.initialize()
 
+        if message is None:
+            message = ""
+
+        message = str(
+            message
+        ).strip()
+
+        if attachments is None:
+            attachments = []
+
         # ----------------------------------------------------
         # Request
         # ----------------------------------------------------
 
         ai_request = AIRequest(
             message=message,
-            attachments=attachments or []
+            attachments=attachments
         )
 
         # ----------------------------------------------------
-        # Build prompt if server did not provide one
+        # Build prompt
         # ----------------------------------------------------
 
         if not prompt or not prompt.strip():
@@ -252,6 +258,10 @@ class AnswerBuilder:
                 message,
                 ai_request
             )
+
+        else:
+
+            prompt = prompt.strip()
 
         # ----------------------------------------------------
         # Generate
@@ -274,16 +284,16 @@ class AnswerBuilder:
         answer = answer.strip()
 
         # ----------------------------------------------------
-        # Memory
+        # Persistent Memory
         # ----------------------------------------------------
 
-        if message and message.strip():
+        if message:
 
-            cls._memory_manager.add_user_message(
-                message.strip()
+            add_user_message(
+                message
             )
 
-        cls._memory_manager.add_assistant_message(
+        add_assistant_message(
             answer
         )
 
@@ -302,13 +312,17 @@ class AnswerBuilder:
 
         memory = ""
 
+        # ----------------------------------------------------
+        # Relevant Persistent Memory
+        # ----------------------------------------------------
+
         try:
 
-            if cls._memory_manager is not None:
+            if message and message.strip():
 
-                memory = (
-                    cls._memory_manager
-                    .get_all_memory_text()
+                memory = get_relevant_memory(
+                    message,
+                    max_results=12
                 )
 
         except Exception:
@@ -418,6 +432,8 @@ class AnswerBuilder:
             "প্রয়োজনে বর্তমান তথ্যের সাথে মিলিয়ে ব্যবহার করবে। "
             "ব্যবহারকারী কোনো পুরোনো বিষয় চালিয়ে গেলে "
             "আগের relevant context ব্যবহার করবে। "
+            "Memory database-এ সংরক্ষিত পুরোনো conversation "
+            "স্বয়ংক্রিয়ভাবে মুছে যাবে না। "
             "\n\n"
         )
 
@@ -504,7 +520,7 @@ class AnswerBuilder:
         )
 
         # ====================================================
-        # MEMORY DATA
+        # PERSISTENT MEMORY DATA
         # ====================================================
 
         if (
@@ -513,7 +529,8 @@ class AnswerBuilder:
         ):
 
             prompt.append(
-                "প্রাসঙ্গিক পূর্বের কথোপকথন ও Memory:\n"
+                "বর্তমান প্রশ্নের সাথে সম্পর্কিত "
+                "পূর্বের কথোপকথন:\n"
             )
 
             prompt.append(
@@ -538,14 +555,14 @@ class AnswerBuilder:
 
                 try:
 
-                    attachments = (
+                    attachments_data = (
                         attachment_payload.get(
                             "attachments",
                             []
                         )
                     )
 
-                    if attachments:
+                    if attachments_data:
 
                         prompt.append(
                             "বর্তমান attachment তথ্য:\n"
@@ -553,7 +570,7 @@ class AnswerBuilder:
 
                         prompt.append(
                             json.dumps(
-                                attachments,
+                                attachments_data,
                                 ensure_ascii=False
                             )
                         )
@@ -599,12 +616,12 @@ class AnswerBuilder:
             "শুধু প্রয়োজনীয় এবং প্রাসঙ্গিক উত্তর দাও।"
         )
 
-        return "".join(prompt)
+        return "".join(
+            prompt
+        )
 
     # ========================================================
     # GEMINI PROCESSING
-    #
-    # ৬টি Gemini model fallback
     # ========================================================
 
     @classmethod
@@ -631,7 +648,7 @@ class AnswerBuilder:
         last_error = None
 
         # ----------------------------------------------------
-        # Try every model
+        # Model fallback
         # ----------------------------------------------------
 
         for model_name in models:
@@ -673,11 +690,6 @@ class AnswerBuilder:
 
                 last_error = error
 
-                # --------------------------------------------
-                # Current model failed.
-                # Try next model.
-                # --------------------------------------------
-
                 continue
 
         # ----------------------------------------------------
@@ -688,7 +700,9 @@ class AnswerBuilder:
 
             raise RuntimeError(
                 "All Gemini models failed. "
-                + cls.safe_error(last_error)
+                + cls.safe_error(
+                    last_error
+                )
             )
 
         raise RuntimeError(
@@ -723,7 +737,7 @@ class AnswerBuilder:
             pass
 
         # ----------------------------------------------------
-        # Fallback candidate extraction
+        # Candidate fallback
         # ----------------------------------------------------
 
         try:
@@ -785,36 +799,33 @@ class AnswerBuilder:
     @classmethod
     def get_memory(cls) -> str:
 
-        if cls._memory_manager is None:
-            return ""
+        try:
 
-        return (
-            cls._memory_manager
-            .get_all_memory_text()
-        )
+            return get_all_memory_text()
+
+        except Exception:
+
+            return ""
 
     # ========================================================
 
     @classmethod
     def get_memory_count(cls) -> int:
 
-        if cls._memory_manager is None:
-            return 0
+        try:
 
-        return (
-            cls._memory_manager
-            .get_memory_count()
-        )
+            return get_memory_count()
+
+        except Exception:
+
+            return 0
 
     # ========================================================
 
     @classmethod
     def clear_memory(cls):
 
-        if cls._memory_manager is None:
-            return
-
-        cls._memory_manager.clear_memory()
+        clear_memory()
 
     # ========================================================
     # SAFE ERROR
@@ -826,16 +837,21 @@ class AnswerBuilder:
     ) -> str:
 
         if error is None:
+
             return "Unknown error."
 
-        message = str(error)
+        message = str(
+            error
+        )
 
         if (
             message is None
             or not message.strip()
         ):
 
-            return type(error).__name__
+            return type(
+                error
+            ).__name__
 
         return message.strip()
 
@@ -928,97 +944,3 @@ class AIRequest:
             "attachments":
                 self._attachments
         }
-
-
-# ============================================================
-# MEMORY MANAGER
-# ============================================================
-
-class MemoryManager:
-
-    def __init__(
-        self,
-        context: Any = None
-    ):
-
-        self._memory = []
-
-    # ========================================================
-
-    def add_user_message(
-        self,
-        message: str
-    ):
-
-        self._memory.append(
-            {
-                "role": "user",
-                "content": message
-            }
-        )
-
-    # ========================================================
-
-    def add_assistant_message(
-        self,
-        message: str
-    ):
-
-        self._memory.append(
-            {
-                "role": "assistant",
-                "content": message
-            }
-        )
-
-    # ========================================================
-
-    def get_all_memory_text(self) -> str:
-
-        if not self._memory:
-            return ""
-
-        result = []
-
-        for item in self._memory:
-
-            role = item.get(
-                "role",
-                ""
-            )
-
-            content = item.get(
-                "content",
-                ""
-            )
-
-            result.append(
-                role
-                + ": "
-                + content
-            )
-
-        return "\n".join(
-            result
-        )
-
-    # ========================================================
-
-    def get_memory_count(self) -> int:
-
-        return len(
-            self._memory
-        )
-
-    # ========================================================
-
-    def clear_memory(self):
-
-        self._memory.clear()
-
-
-# ============================================================
-# SINGLE INSTANCE
-# ============================================================
-
-answer_builder = AnswerBuilder()
