@@ -223,10 +223,6 @@ class AnswerBuilder:
         attachments: Optional[list] = None
     ) -> str:
 
-        # ----------------------------------------------------
-        # Initialize
-        # ----------------------------------------------------
-
         cls.initialize()
 
         if message is None:
@@ -648,10 +644,22 @@ class AnswerBuilder:
         last_error = None
 
         # ----------------------------------------------------
-        # Model fallback
+        # INSTANT MODEL FALLBACK
+        #
+        # কোনো sleep / delay নেই।
+        #
+        # Model 1 fail
+        #     ↓
+        # সঙ্গে সঙ্গে Model 2
+        #     ↓
+        # সঙ্গে সঙ্গে Model 3
+        #     ↓
+        # সঙ্গে সঙ্গে Model 4
+        #     ↓
+        # এভাবে config-এর সব model শেষ হওয়া পর্যন্ত।
         # ----------------------------------------------------
 
-        for model_name in models:
+        for index, model_name in enumerate(models, start=1):
 
             if (
                 model_name is None
@@ -659,12 +667,19 @@ class AnswerBuilder:
             ):
                 continue
 
+            model_name = str(
+                model_name
+            ).strip()
+
             try:
 
+                print(
+                    "Mafiya AI: Trying Gemini model "
+                    f"{index}: {model_name}"
+                )
+
                 model = genai.GenerativeModel(
-                    model_name=str(
-                        model_name
-                    ).strip()
+                    model_name=model_name
                 )
 
                 response = model.generate_content(
@@ -680,20 +695,43 @@ class AnswerBuilder:
                     and answer.strip()
                 ):
 
+                    print(
+                        "Mafiya AI: Model succeeded → "
+                        f"{model_name}"
+                    )
+
                     return answer.strip()
 
                 last_error = RuntimeError(
-                    "Model returned an empty response."
+                    f"Model {model_name} returned "
+                    "an empty response."
+                )
+
+                print(
+                    "Mafiya AI: Empty response from → "
+                    f"{model_name}"
                 )
 
             except Exception as error:
 
                 last_error = error
 
+                print(
+                    "Mafiya AI: Model failed → "
+                    f"{model_name} | "
+                    f"{cls.safe_error(error)}"
+                )
+
+                # --------------------------------------------
+                # IMPORTANT:
+                # কোনো sleep নেই।
+                # সঙ্গে সঙ্গে পরের model-এ যাবে।
+                # --------------------------------------------
+
                 continue
 
         # ----------------------------------------------------
-        # All models failed
+        # ALL MODELS FAILED
         # ----------------------------------------------------
 
         if last_error is not None:
