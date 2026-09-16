@@ -15,4 +15,6 @@ env/
 .idea/
 
 .DS_Store
-Thumbs.dbdb
+Thumbs.db
+
+mafiya_memory.db
