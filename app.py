@@ -3,6 +3,7 @@
 import os
 
 from flask import Flask, jsonify, request
+from flask_cors import CORS
 
 from chat import (
     chat_health_check,
@@ -28,6 +29,9 @@ from memory import (
 app = Flask(__name__)
 
 app.config["JSON_AS_ASCII"] = False
+
+# Allow requests from the MafiyaAI Android WebView.
+CORS(app)
 
 
 # ============================================================
@@ -82,7 +86,7 @@ def health():
             "ai": False,
             "response": None,
             "error": str(error)
-        })
+        }), 500
 
 
 # ============================================================
