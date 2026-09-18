@@ -1,9 +1,8 @@
 # backend/answer_builder.py
 
-from typing import Any, Callable, Dict, List, Optional
+from typing import Any, Callable, List, Optional
 
 from ai import generate_ai_response
-
 from memory import (
     add_message,
     build_context,
@@ -21,10 +20,7 @@ class AnswerBuilder:
     # ========================================================
 
     @classmethod
-    def initialize(
-        cls,
-        context: Any = None
-    ) -> None:
+    def initialize(cls, context: Any = None) -> None:
 
         if cls._initialized:
             return
@@ -61,7 +57,6 @@ class AnswerBuilder:
         user_message: str,
         conversation_id: Optional[str] = None,
         attachments: Optional[List[Any]] = None,
-        metadata: Optional[Dict[str, Any]] = None,
         callback: Optional[
             Callable[[Optional[str], Optional[str]], None]
         ] = None,
@@ -74,21 +69,14 @@ class AnswerBuilder:
             if user_message is None:
                 user_message = ""
 
-            user_message = str(
-                user_message
-            ).strip()
+            user_message = str(user_message).strip()
 
             if attachments is None:
                 attachments = []
 
-            if metadata is None:
-                metadata = {}
-
             if not user_message and not attachments:
 
-                error = (
-                    "User message and attachments are empty."
-                )
+                error = "User message and attachments are empty."
 
                 cls._send_error(
                     callback,
@@ -101,7 +89,6 @@ class AnswerBuilder:
                 message=user_message,
                 conversation_id=conversation_id,
                 attachments=attachments,
-                metadata=metadata,
             )
 
             cls._send_success(
@@ -113,9 +100,7 @@ class AnswerBuilder:
 
         except Exception as error:
 
-            error_message = cls.safe_error(
-                error
-            )
+            error_message = cls.safe_error(error)
 
             cls._send_error(
                 callback,
@@ -135,7 +120,6 @@ class AnswerBuilder:
         conversation_id: Optional[str] = None,
         prompt: str = "",
         attachments: Optional[List[Any]] = None,
-        metadata: Optional[Dict[str, Any]] = None,
     ) -> str:
 
         cls.initialize()
@@ -143,15 +127,10 @@ class AnswerBuilder:
         if message is None:
             message = ""
 
-        message = str(
-            message
-        ).strip()
+        message = str(message).strip()
 
         if attachments is None:
             attachments = []
-
-        if metadata is None:
-            metadata = {}
 
         conversation_context = ""
 
@@ -181,14 +160,11 @@ class AnswerBuilder:
         )
 
         if answer is None:
-
             raise RuntimeError(
                 "AI returned an empty answer."
             )
 
-        answer = str(
-            answer
-        ).strip()
+        answer = str(answer).strip()
 
         if not answer:
 
@@ -196,27 +172,17 @@ class AnswerBuilder:
                 "AI returned an empty answer."
             )
 
-        # ----------------------------------------------------
-        # Save conversation memory
-        # ----------------------------------------------------
-
         if conversation_id:
 
             if message:
-
-                input_metadata = {
-                    "input_type": "text"
-                }
-
-                input_metadata.update(
-                    metadata
-                )
 
                 add_message(
                     conversation_id=conversation_id,
                     role="user",
                     content=message,
-                    metadata=input_metadata,
+                    metadata={
+                        "input_type": "text"
+                    },
                 )
 
             add_message(
@@ -346,7 +312,7 @@ When the user is working on a project, use relevant previous context.
 
         # ====================================================
         # MEMORY
-        # ====================================================
+        # ========================================================
 
         prompt_parts.append(
             """
@@ -510,9 +476,7 @@ current request.
 """
         )
 
-        return "\n\n".join(
-            prompt_parts
-        )
+        return "\n\n".join(prompt_parts)
 
     # ========================================================
     # ATTACHMENT FORMATTER
@@ -533,10 +497,7 @@ current request.
             start=1,
         ):
 
-            if isinstance(
-                attachment,
-                dict
-            ):
+            if isinstance(attachment, dict):
 
                 attachment_type = attachment.get(
                     "type",
@@ -567,9 +528,7 @@ current request.
                     f"{str(attachment)}"
                 )
 
-        return "\n\n".join(
-            result
-        )
+        return "\n\n".join(result)
 
     # ========================================================
     # SAVE LONG-TERM MEMORY
@@ -661,9 +620,7 @@ current request.
         if error is None:
             return "Unknown error."
 
-        message = str(
-            error
-        )
+        message = str(error)
 
         if not message.strip():
 

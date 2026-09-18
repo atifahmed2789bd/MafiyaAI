@@ -3,6 +3,8 @@
 import json
 import os
 import threading
+import uuid
+
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
@@ -10,16 +12,20 @@ from typing import Any, Dict, List, Optional
 # ============================================================
 # MafiyaAI Memory System
 # ============================================================
-#
-# No fixed message limit
-# No fixed memory-entry limit
-# No automatic deletion
+
+# No fixed message limit.
+# No fixed memory-entry limit.
+# No automatic deletion.
 #
 # Memory is stored in a JSON file and grows as storage allows.
 # ============================================================
 
 
-BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+BASE_DIR = os.path.dirname(
+    os.path.dirname(
+        os.path.abspath(__file__)
+    )
+)
 
 MEMORY_FILE = os.path.join(
     BASE_DIR,
@@ -34,15 +40,20 @@ _memory_lock = threading.RLock()
 # ============================================================
 
 def _now() -> str:
-    return datetime.now(timezone.utc).isoformat()
+
+    return datetime.now(
+        timezone.utc
+    ).isoformat()
 
 
 def _empty_memory() -> Dict[str, Any]:
+
     return {
         "version": 1,
         "created_at": _now(),
         "updated_at": _now(),
-        "conversations": []
+        "conversations": [],
+        "long_term_memory": {}
     }
 
 
@@ -50,7 +61,10 @@ def _load_memory() -> Dict[str, Any]:
 
     with _memory_lock:
 
-        if not os.path.exists(MEMORY_FILE):
+        if not os.path.exists(
+            MEMORY_FILE
+        ):
+
             return _empty_memory()
 
         try:
@@ -61,39 +75,59 @@ def _load_memory() -> Dict[str, Any]:
                 encoding="utf-8"
             ) as file:
 
-                data = json.load(file)
+                data = json.load(
+                    file
+                )
 
-            if not isinstance(data, dict):
+            if not isinstance(
+                data,
+                dict
+            ):
+
                 return _empty_memory()
 
             if "conversations" not in data:
+
                 data["conversations"] = []
+
+            if "long_term_memory" not in data:
+
+                data["long_term_memory"] = {}
 
             return data
 
-        except (json.JSONDecodeError, OSError):
+        except (
+            json.JSONDecodeError,
+            OSError
+        ):
 
-            # Do not destroy existing data.
-            # Return a fresh in-memory structure if the file
-            # cannot currently be read.
+            # Do not overwrite or destroy
+            # an unreadable existing file.
             return _empty_memory()
 
 
-def _save_memory(data: Dict[str, Any]) -> None:
+def _save_memory(
+    data: Dict[str, Any]
+) -> None:
 
     with _memory_lock:
 
         data["updated_at"] = _now()
 
-        directory = os.path.dirname(MEMORY_FILE)
+        directory = os.path.dirname(
+            MEMORY_FILE
+        )
 
         if directory:
+
             os.makedirs(
                 directory,
                 exist_ok=True
             )
 
-        temporary_file = MEMORY_FILE + ".tmp"
+        temporary_file = (
+            MEMORY_FILE + ".tmp"
+        )
 
         with open(
             temporary_file,
@@ -108,7 +142,6 @@ def _save_memory(data: Dict[str, Any]) -> None:
                 indent=2
             )
 
-        # Atomic replacement
         os.replace(
             temporary_file,
             MEMORY_FILE
@@ -123,15 +156,18 @@ def create_conversation(
     title: Optional[str] = None
 ) -> str:
 
-    import uuid
-
-    conversation_id = str(uuid.uuid4())
+    conversation_id = str(
+        uuid.uuid4()
+    )
 
     data = _load_memory()
 
     conversation = {
         "id": conversation_id,
-        "title": title or "New Conversation",
+        "title": (
+            title
+            or "New Conversation"
+        ),
         "created_at": _now(),
         "updated_at": _now(),
         "messages": []
@@ -141,7 +177,9 @@ def create_conversation(
         conversation
     )
 
-    _save_memory(data)
+    _save_memory(
+        data
+    )
 
     return conversation_id
 
@@ -154,65 +192,95 @@ def add_message(
     conversation_id: str,
     role: str,
     content: str,
-    metadata: Optional[Dict[str, Any]] = None
+    metadata: Optional[
+        Dict[str, Any]
+    ] = None
 ) -> Dict[str, Any]:
 
-    import uuid
-
     if not conversation_id:
+
         raise ValueError(
             "conversation_id is required."
         )
 
     if not role:
+
         raise ValueError(
             "role is required."
         )
 
     if content is None:
+
         content = ""
 
-    data = _load_memory()
-
-    conversation = None
-
-    for item in data["conversations"]:
-
-        if item.get("id") == conversation_id:
-            conversation = item
-            break
-
-    if conversation is None:
-
-        conversation_id = create_conversation()
+    with _memory_lock:
 
         data = _load_memory()
 
-        for item in data["conversations"]:
+        conversation = None
 
-            if item.get("id") == conversation_id:
+        for item in data[
+            "conversations"
+        ]:
+
+            if item.get(
+                "id"
+            ) == conversation_id:
+
                 conversation = item
                 break
 
-    message = {
-        "id": str(uuid.uuid4()),
-        "role": role,
-        "content": str(content),
-        "created_at": _now()
-    }
+        # ----------------------------------------------------
+        # Do not silently change the requested conversation ID.
+        # If it does not exist, create it using that same ID.
+        # ----------------------------------------------------
 
-    if metadata:
-        message["metadata"] = metadata
+        if conversation is None:
 
-    conversation["messages"].append(
-        message
-    )
+            conversation = {
+                "id": conversation_id,
+                "title": "New Conversation",
+                "created_at": _now(),
+                "updated_at": _now(),
+                "messages": []
+            }
 
-    conversation["updated_at"] = _now()
+            data[
+                "conversations"
+            ].append(
+                conversation
+            )
 
-    _save_memory(data)
+        message = {
+            "id": str(
+                uuid.uuid4()
+            ),
+            "role": str(role),
+            "content": str(content),
+            "created_at": _now()
+        }
 
-    return message
+        if metadata:
+
+            message[
+                "metadata"
+            ] = metadata
+
+        conversation[
+            "messages"
+        ].append(
+            message
+        )
+
+        conversation[
+            "updated_at"
+        ] = _now()
+
+        _save_memory(
+            data
+        )
+
+        return message
 
 
 # ============================================================
@@ -223,11 +291,20 @@ def get_conversation(
     conversation_id: str
 ) -> Optional[Dict[str, Any]]:
 
+    if not conversation_id:
+
+        return None
+
     data = _load_memory()
 
-    for conversation in data["conversations"]:
+    for conversation in data[
+        "conversations"
+    ]:
 
-        if conversation.get("id") == conversation_id:
+        if conversation.get(
+            "id"
+        ) == conversation_id:
+
             return conversation
 
     return None
@@ -237,11 +314,15 @@ def get_conversation(
 # Get All Conversations
 # ============================================================
 
-def get_all_conversations() -> List[Dict[str, Any]]:
+def get_all_conversations(
+) -> List[Dict[str, Any]]:
 
     data = _load_memory()
 
-    return data["conversations"]
+    return data.get(
+        "conversations",
+        []
+    )
 
 
 # ============================================================
@@ -257,6 +338,7 @@ def get_messages(
     )
 
     if not conversation:
+
         return []
 
     return conversation.get(
@@ -278,6 +360,7 @@ def build_context(
     )
 
     if not messages:
+
         return ""
 
     context_parts = []
@@ -295,6 +378,7 @@ def build_context(
         )
 
         if not content:
+
             continue
 
         context_parts.append(
@@ -315,15 +399,24 @@ def search_memory(
 ) -> List[Dict[str, Any]]:
 
     if not query:
+
         return []
 
-    query = query.lower()
+    query = str(
+        query
+    ).strip().lower()
+
+    if not query:
+
+        return []
 
     data = _load_memory()
 
     results = []
 
-    for conversation in data["conversations"]:
+    for conversation in data[
+        "conversations"
+    ]:
 
         for message in conversation.get(
             "messages",
@@ -341,19 +434,27 @@ def search_memory(
 
                 results.append({
                     "conversation_id":
-                        conversation.get("id"),
+                        conversation.get(
+                            "id"
+                        ),
 
                     "message_id":
-                        message.get("id"),
+                        message.get(
+                            "id"
+                        ),
 
                     "role":
-                        message.get("role"),
+                        message.get(
+                            "role"
+                        ),
 
                     "content":
                         content,
 
                     "created_at":
-                        message.get("created_at")
+                        message.get(
+                            "created_at"
+                        )
                 })
 
     return results
@@ -368,17 +469,40 @@ def save_long_term_memory(
     value: Any
 ) -> None:
 
+    if key is None:
+
+        raise ValueError(
+            "Memory key is required."
+        )
+
+    key = str(
+        key
+    ).strip()
+
+    if not key:
+
+        raise ValueError(
+            "Memory key is required."
+        )
+
     data = _load_memory()
 
     if "long_term_memory" not in data:
-        data["long_term_memory"] = {}
 
-    data["long_term_memory"][key] = {
+        data[
+            "long_term_memory"
+        ] = {}
+
+    data[
+        "long_term_memory"
+    ][key] = {
         "value": value,
         "updated_at": _now()
     }
 
-    _save_memory(data)
+    _save_memory(
+        data
+    )
 
 
 # ============================================================
@@ -397,11 +521,15 @@ def get_long_term_memory(
     )
 
     if key is None:
+
         return memories
 
-    memory = memories.get(key)
+    memory = memories.get(
+        key
+    )
 
     if memory is None:
+
         return None
 
     return memory.get(
@@ -412,34 +540,52 @@ def get_long_term_memory(
 # ============================================================
 # Delete Conversation
 # ============================================================
-#
-# This function exists only for an explicit user action.
-# Nothing is automatically deleted by the system.
-# ============================================================
+
+# This function only runs when explicitly called.
+# Nothing is automatically deleted.
 
 def delete_conversation(
     conversation_id: str
 ) -> bool:
 
+    if not conversation_id:
+
+        return False
+
     data = _load_memory()
 
     original_count = len(
-        data["conversations"]
+        data[
+            "conversations"
+        ]
     )
 
-    data["conversations"] = [
+    data[
+        "conversations"
+    ] = [
         conversation
-        for conversation in data["conversations"]
-        if conversation.get("id") != conversation_id
+        for conversation in data[
+            "conversations"
+        ]
+        if conversation.get(
+            "id"
+        ) != conversation_id
     ]
 
     changed = (
-        len(data["conversations"])
+        len(
+            data[
+                "conversations"
+            ]
+        )
         != original_count
     )
 
     if changed:
-        _save_memory(data)
+
+        _save_memory(
+            data
+        )
 
     return changed
 
@@ -448,7 +594,8 @@ def delete_conversation(
 # Memory Statistics
 # ============================================================
 
-def get_memory_stats() -> Dict[str, int]:
+def get_memory_stats(
+) -> Dict[str, int]:
 
     data = _load_memory()
 

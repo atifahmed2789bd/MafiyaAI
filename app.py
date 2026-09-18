@@ -27,11 +27,6 @@ from memory import (
 
 app = Flask(__name__)
 
-
-# ============================================================
-# Basic Configuration
-# ============================================================
-
 app.config["JSON_AS_ASCII"] = False
 
 
@@ -57,22 +52,47 @@ def home():
 @app.route("/health", methods=["GET"])
 def health():
 
-    result = chat_health_check()
+    try:
 
-    return jsonify({
-        "success": result.get("success", False),
-        "server": True,
-        "ai": result.get("ai", False),
-        "response": result.get("response"),
-        "error": result.get("error")
-    })
+        result = chat_health_check()
+
+        return jsonify({
+            "success": result.get(
+                "success",
+                False
+            ),
+            "server": True,
+            "ai": result.get(
+                "ai",
+                False
+            ),
+            "response": result.get(
+                "response"
+            ),
+            "error": result.get(
+                "error"
+            )
+        })
+
+    except Exception as error:
+
+        return jsonify({
+            "success": False,
+            "server": True,
+            "ai": False,
+            "response": None,
+            "error": str(error)
+        })
 
 
 # ============================================================
 # Create New Chat
 # ============================================================
 
-@app.route("/chat/new", methods=["POST"])
+@app.route(
+    "/chat/new",
+    methods=["POST"]
+)
 def create_new_chat():
 
     try:
@@ -81,13 +101,17 @@ def create_new_chat():
             silent=True
         ) or {}
 
-        title = data.get("title")
+        title = data.get(
+            "title"
+        )
 
         result = new_chat(
             title=title
         )
 
-        return jsonify(result)
+        return jsonify(
+            result
+        )
 
     except Exception as error:
 
@@ -101,7 +125,10 @@ def create_new_chat():
 # Send Text Message
 # ============================================================
 
-@app.route("/chat/message", methods=["POST"])
+@app.route(
+    "/chat/message",
+    methods=["POST"]
+)
 def chat_message():
 
     try:
@@ -110,7 +137,9 @@ def chat_message():
             silent=True
         ) or {}
 
-        message = data.get("message")
+        message = data.get(
+            "message"
+        )
 
         conversation_id = data.get(
             "conversation_id"
@@ -124,8 +153,22 @@ def chat_message():
 
             return jsonify({
                 "success": False,
-                "error": "message is required."
+                "error":
+                    "message is required."
             }), 400
+
+        if metadata is not None:
+
+            if not isinstance(
+                metadata,
+                dict
+            ):
+
+                return jsonify({
+                    "success": False,
+                    "error":
+                        "metadata must be an object."
+                }), 400
 
         result = send_message(
             message=message,
@@ -133,7 +176,9 @@ def chat_message():
             metadata=metadata
         )
 
-        return jsonify(result)
+        return jsonify(
+            result
+        )
 
     except ValueError as error:
 
@@ -154,7 +199,10 @@ def chat_message():
 # Send Voice Message
 # ============================================================
 
-@app.route("/chat/voice", methods=["POST"])
+@app.route(
+    "/chat/voice",
+    methods=["POST"]
+)
 def chat_voice():
 
     try:
@@ -163,17 +211,30 @@ def chat_voice():
             silent=True
         ) or {}
 
-        recognized_text = data.get("text")
+        recognized_text = data.get(
+            "text"
+        )
 
         conversation_id = data.get(
             "conversation_id"
         )
 
-        if not recognized_text:
+        if recognized_text is None:
 
             return jsonify({
                 "success": False,
-                "error": "text is required."
+                "error":
+                    "text is required."
+            }), 400
+
+        if not str(
+            recognized_text
+        ).strip():
+
+            return jsonify({
+                "success": False,
+                "error":
+                    "text cannot be empty."
             }), 400
 
         result = send_voice_message(
@@ -181,7 +242,9 @@ def chat_voice():
             conversation_id=conversation_id
         )
 
-        return jsonify(result)
+        return jsonify(
+            result
+        )
 
     except ValueError as error:
 
@@ -233,7 +296,9 @@ def conversations():
     "/memory/conversation/<conversation_id>",
     methods=["GET"]
 )
-def conversation(conversation_id):
+def conversation(
+    conversation_id
+):
 
     try:
 
@@ -245,7 +310,8 @@ def conversation(conversation_id):
 
             return jsonify({
                 "success": False,
-                "error": "Conversation not found."
+                "error":
+                    "Conversation not found."
             }), 404
 
         return jsonify({
@@ -282,7 +348,8 @@ def memory_search():
 
             return jsonify({
                 "success": False,
-                "error": "Search query is required."
+                "error":
+                    "Search query is required."
             }), 400
 
         results = search_memory(
@@ -342,7 +409,9 @@ def get_long_term():
 
     try:
 
-        key = request.args.get("key")
+        key = request.args.get(
+            "key"
+        )
 
         result = get_long_term_memory(
             key
@@ -377,15 +446,30 @@ def save_long_term():
             silent=True
         ) or {}
 
-        key = data.get("key")
+        key = data.get(
+            "key"
+        )
 
-        value = data.get("value")
+        value = data.get(
+            "value"
+        )
 
-        if not key:
+        if key is None:
 
             return jsonify({
                 "success": False,
-                "error": "key is required."
+                "error":
+                    "key is required."
+            }), 400
+
+        if not str(
+            key
+        ).strip():
+
+            return jsonify({
+                "success": False,
+                "error":
+                    "key cannot be empty."
             }), 400
 
         save_long_term_memory(
@@ -395,8 +479,16 @@ def save_long_term():
 
         return jsonify({
             "success": True,
-            "message": "Long-term memory saved."
+            "message":
+                "Long-term memory saved."
         })
+
+    except ValueError as error:
+
+        return jsonify({
+            "success": False,
+            "error": str(error)
+        }), 400
 
     except Exception as error:
 
@@ -415,7 +507,8 @@ def not_found(error):
 
     return jsonify({
         "success": False,
-        "error": "Endpoint not found."
+        "error":
+            "Endpoint not found."
     }), 404
 
 

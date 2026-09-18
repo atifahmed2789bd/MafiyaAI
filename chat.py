@@ -3,8 +3,8 @@
 from typing import Any, Dict, Optional
 
 from answer_builder import AnswerBuilder
+
 from memory import (
-    add_message,
     build_context,
     create_conversation,
     get_conversation,
@@ -14,7 +14,7 @@ from memory import (
 # ============================================================
 # MafiyaAI Chat Controller
 # ============================================================
-#
+
 # Flow:
 #
 # User Message
@@ -33,7 +33,7 @@ from memory import (
 #      ↓
 # Response
 #
-# Answer Builder is kept in a separate file.
+# Answer Builder remains in a separate file.
 #
 # No fixed message limit.
 # No automatic conversation deletion.
@@ -101,15 +101,15 @@ def send_message(
             "Message cannot be empty."
         )
 
-    message = str(message)
+    message = str(
+        message
+    ).strip()
 
-    if not message.strip():
+    if not message:
 
         raise ValueError(
             "Message cannot be empty."
         )
-
-    message = message.strip()
 
     # --------------------------------------------------------
     # Conversation
@@ -120,16 +120,17 @@ def send_message(
     )
 
     # --------------------------------------------------------
-    # Generate AI response through Answer Builder
+    # Generate AI response
     # --------------------------------------------------------
 
     ai_response = AnswerBuilder.generate_answer(
         message=message,
-        conversation_id=conversation_id
+        conversation_id=conversation_id,
+        metadata=metadata
     )
 
     # --------------------------------------------------------
-    # Get saved messages
+    # Get saved conversation
     # --------------------------------------------------------
 
     conversation = get_conversation(
@@ -146,30 +147,29 @@ def send_message(
             []
         )
 
-        if messages:
+        # Find the latest user and assistant messages.
+        for item in reversed(messages):
 
-            for item in reversed(messages):
+            if (
+                user_message is None
+                and item.get("role") == "user"
+            ):
 
-                if (
-                    user_message is None
-                    and item.get("role") == "user"
-                ):
+                user_message = item
 
-                    user_message = item
+            elif (
+                assistant_message is None
+                and item.get("role") == "assistant"
+            ):
 
-                elif (
-                    assistant_message is None
-                    and item.get("role") == "assistant"
-                ):
+                assistant_message = item
 
-                    assistant_message = item
+            if (
+                user_message is not None
+                and assistant_message is not None
+            ):
 
-                if (
-                    user_message is not None
-                    and assistant_message is not None
-                ):
-
-                    break
+                break
 
     # --------------------------------------------------------
     # Return result
@@ -254,7 +254,8 @@ def chat_health_check() -> Dict[str, Any]:
         return {
             "success": True,
             "ai": True,
-            "response": result
+            "response": result,
+            "error": None
         }
 
     except Exception as error:
@@ -262,5 +263,6 @@ def chat_health_check() -> Dict[str, Any]:
         return {
             "success": False,
             "ai": False,
+            "response": None,
             "error": str(error)
         }
