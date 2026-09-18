@@ -1,5 +1,7 @@
 # backend/app.py
 
+import os
+
 from flask import Flask, jsonify, request
 
 from chat import (
@@ -8,6 +10,7 @@ from chat import (
     send_message,
     send_voice_message,
 )
+
 from memory import (
     get_all_conversations,
     get_conversation,
@@ -78,9 +81,7 @@ def create_new_chat():
             silent=True
         ) or {}
 
-        title = data.get(
-            "title"
-        )
+        title = data.get("title")
 
         result = new_chat(
             title=title
@@ -109,9 +110,7 @@ def chat_message():
             silent=True
         ) or {}
 
-        message = data.get(
-            "message"
-        )
+        message = data.get("message")
 
         conversation_id = data.get(
             "conversation_id"
@@ -164,9 +163,7 @@ def chat_voice():
             silent=True
         ) or {}
 
-        recognized_text = data.get(
-            "text"
-        )
+        recognized_text = data.get("text")
 
         conversation_id = data.get(
             "conversation_id"
@@ -205,7 +202,10 @@ def chat_voice():
 # Get All Conversations
 # ============================================================
 
-@app.route("/memory/conversations", methods=["GET"])
+@app.route(
+    "/memory/conversations",
+    methods=["GET"]
+)
 def conversations():
 
     try:
@@ -265,7 +265,10 @@ def conversation(conversation_id):
 # Search Memory
 # ============================================================
 
-@app.route("/memory/search", methods=["GET"])
+@app.route(
+    "/memory/search",
+    methods=["GET"]
+)
 def memory_search():
 
     try:
@@ -304,7 +307,10 @@ def memory_search():
 # Memory Statistics
 # ============================================================
 
-@app.route("/memory/stats", methods=["GET"])
+@app.route(
+    "/memory/stats",
+    methods=["GET"]
+)
 def memory_stats():
 
     try:
@@ -328,14 +334,15 @@ def memory_stats():
 # Get Long-Term Memory
 # ============================================================
 
-@app.route("/memory/long-term", methods=["GET"])
+@app.route(
+    "/memory/long-term",
+    methods=["GET"]
+)
 def get_long_term():
 
     try:
 
-        key = request.args.get(
-            "key"
-        )
+        key = request.args.get("key")
 
         result = get_long_term_memory(
             key
@@ -370,13 +377,9 @@ def save_long_term():
             silent=True
         ) or {}
 
-        key = data.get(
-            "key"
-        )
+        key = data.get("key")
 
-        value = data.get(
-            "value"
-        )
+        value = data.get("value")
 
         if not key:
 
@@ -435,9 +438,16 @@ def internal_error(error):
 
 if __name__ == "__main__":
 
+    port = int(
+        os.environ.get(
+            "PORT",
+            5000
+        )
+    )
+
     app.run(
         host="0.0.0.0",
-        port=5000,
+        port=port,
         debug=False,
         threaded=True
     )

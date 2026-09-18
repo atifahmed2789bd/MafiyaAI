@@ -2,7 +2,7 @@
 
 from typing import Any, Dict, Optional
 
-from ai import generate_ai_response
+from answer_builder import AnswerBuilder
 from memory import (
     add_message,
     build_context,
@@ -19,7 +19,9 @@ from memory import (
 #
 # User Message
 #      ↓
-# Memory
+# Chat Controller
+#      ↓
+# Answer Builder
 #      ↓
 # Conversation Context
 #      ↓
@@ -30,6 +32,8 @@ from memory import (
 # Memory
 #      ↓
 # Response
+#
+# Answer Builder is kept in a separate file.
 #
 # No fixed message limit.
 # No automatic conversation deletion.
@@ -72,8 +76,6 @@ def _ensure_conversation(
         if conversation:
             return conversation_id
 
-    # Create a new conversation automatically
-    # if no valid conversation exists.
     return create_conversation(
         title="New Conversation"
     )
@@ -94,6 +96,7 @@ def send_message(
     # --------------------------------------------------------
 
     if message is None:
+
         raise ValueError(
             "Message cannot be empty."
         )
@@ -101,10 +104,12 @@ def send_message(
     message = str(message)
 
     if not message.strip():
+
         raise ValueError(
             "Message cannot be empty."
         )
 
+    message = message.strip()
 
     # --------------------------------------------------------
     # Conversation
@@ -114,48 +119,57 @@ def send_message(
         conversation_id
     )
 
-
     # --------------------------------------------------------
-    # Save user message
+    # Generate AI response through Answer Builder
     # --------------------------------------------------------
 
-    user_message = add_message(
-        conversation_id=conversation_id,
-        role="user",
-        content=message,
-        metadata=metadata
+    ai_response = AnswerBuilder.generate_answer(
+        message=message,
+        conversation_id=conversation_id
     )
 
-
     # --------------------------------------------------------
-    # Build complete conversation context
+    # Get saved messages
     # --------------------------------------------------------
 
-    context = build_context(
+    conversation = get_conversation(
         conversation_id
     )
 
+    user_message = None
+    assistant_message = None
 
-    # --------------------------------------------------------
-    # Generate AI response
-    # --------------------------------------------------------
+    if conversation:
 
-    ai_response = generate_ai_response(
-        message=message,
-        conversation_context=context
-    )
+        messages = conversation.get(
+            "messages",
+            []
+        )
 
+        if messages:
 
-    # --------------------------------------------------------
-    # Save AI response
-    # --------------------------------------------------------
+            for item in reversed(messages):
 
-    assistant_message = add_message(
-        conversation_id=conversation_id,
-        role="assistant",
-        content=ai_response
-    )
+                if (
+                    user_message is None
+                    and item.get("role") == "user"
+                ):
 
+                    user_message = item
+
+                elif (
+                    assistant_message is None
+                    and item.get("role") == "assistant"
+                ):
+
+                    assistant_message = item
+
+                if (
+                    user_message is not None
+                    and assistant_message is not None
+                ):
+
+                    break
 
     # --------------------------------------------------------
     # Return result
@@ -187,7 +201,18 @@ def send_voice_message(
     conversation_id: Optional[str] = None
 ) -> Dict[str, Any]:
 
+    if recognized_text is None:
+
+        raise ValueError(
+            "Recognized voice text is empty."
+        )
+
+    recognized_text = str(
+        recognized_text
+    ).strip()
+
     if not recognized_text:
+
         raise ValueError(
             "Recognized voice text is empty."
         )
@@ -222,7 +247,7 @@ def chat_health_check() -> Dict[str, Any]:
 
     try:
 
-        result = generate_ai_response(
+        result = AnswerBuilder.generate_answer(
             message="Reply with exactly: OK"
         )
 
