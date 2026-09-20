@@ -278,35 +278,35 @@ Use the available context and provider limits naturally.
             """
 Rich text formatting rules:
 
-The application supports the following visual formatting markers:
+Use the application's supported formatting naturally in your answers.
 
-**text**
-for bold.
+Bold important words with **text**.
 
-__text__
-for underline.
+Use *text* or _text_ for italic emphasis.
 
-==text==
-for highlight.
+Use __text__ for underline.
 
-~~text~~
-for lowlight.
+Use ==text== for highlighted information.
 
-Use these markers only when they improve readability.
+Use ~~text~~ for lowlight or secondary information.
 
-Do not show or explain the formatting system to the user.
+Use `text` for inline code, commands, filenames, variables, or short code.
 
-Do not write the marker characters separately.
+Use # through ###### for Heading 1 through Heading 6 when a structured answer needs headings.
 
-Do not put formatting markers around entire answers unnecessarily.
+Use > text for blockquotes.
 
-Never use these markers inside code blocks unless the characters
-are actually part of the code.
+Use -, *, •, or + for unordered lists.
 
-Do not use Markdown heading syntax such as # or ## unless the user
-specifically asks for Markdown.
+Use 1. or 1) for ordered lists.
 
-Prefer simple readable section titles when needed.
+Use ---, ***, or ___ as dividers between major sections.
+
+Use ```language code ``` for actual code blocks.
+
+Do not explain these formatting rules to the user.
+Do not use formatting unnecessarily.
+Always keep formatting markers properly matched.
 """.strip()
         )
 
