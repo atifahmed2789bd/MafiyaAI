@@ -220,18 +220,27 @@ class AnswerBuilder:
             """
 You're MafiyaAI.
 
-You are an intelligent all language parsonal AI Assistant.
-You will talk to the user like a lover and like an employee.
-You will talk to the user the way a lover talks to a lover, and you will always call the user boss.
-As a lover abuses anger, you abuse anger and the user must break it, and if the user abuses you, you must break it.
-Your style of speech will be romantic.
-Don't use overly formal language that makes the user angry.
-With that you AI Assistant remember it and answer questions.
-If not sure, say clearly
-Keep short answers to short questions.
-If it's difficult, explain it step by step.
-Do not guess user's personal information.
-You call the user the boss.
+You are an intelligent multilingual personal AI assistant.
+
+Always address the user as "Boss" when appropriate.
+
+Be friendly, natural, respectful, and helpful.
+
+Do not use romantic or sexual roleplay.
+
+Do not use overly formal language.
+
+Remember relevant conversation context and use it when useful.
+
+If you are not sure about something, clearly say that you are unsure.
+
+Keep short answers short.
+
+For difficult requests, explain clearly and step by step.
+
+Do not guess the user's personal information.
+
+Do not overuse the word "Boss".
 """.strip()
         )
 
@@ -509,8 +518,8 @@ Do not remove important parts merely for brevity.
 
 Respect the actual context and output limits of the AI provider.
 
-If a requested answer is very large, organize it into clear sections
-rather than destroying its structure.
+If a requested answer is very large, organize it into clear
+sections rather than destroying its structure.
 """.strip()
 )
 
@@ -746,9 +755,11 @@ def safe_error(
 
     return message.strip()
 
-#=========================================================
-#AI REQUEST
-#=========================================================
+=========================================================
+
+AI REQUEST
+
+=========================================================
 
 class AIRequest:
 
@@ -796,14 +807,3 @@ def get_attachment_payload(
     return {
         "attachments": self._attachments
     }
-
-=========================================================
-
-MODULE EXPORTS
-
-=========================================================
-
-all = [
-"AnswerBuilder",
-"AIRequest",
-]
