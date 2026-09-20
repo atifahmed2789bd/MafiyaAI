@@ -1,4 +1,4 @@
-# backend/config.py
+# config.py
 
 import os
 
@@ -23,23 +23,59 @@ PORT = int(
 
 
 # ============================================================
-# Gemini API
+# Gemini API Keys
+# ============================================================
+#
+# Supported:
+# GEMINI_API_KEY_1
+# GEMINI_API_KEY_2
+# ...
+# GEMINI_API_KEY_100
+#
+# Up to 100 API keys can be configured.
+# Empty variables are automatically ignored.
 # ============================================================
 
-GEMINI_API_KEY = os.getenv(
+GEMINI_API_KEYS = [
+    os.getenv(
+        f"GEMINI_API_KEY_{index}",
+        ""
+    ).strip()
+    for index in range(1, 101)
+]
+
+GEMINI_API_KEYS = list(
+    dict.fromkeys(
+        key
+        for key in GEMINI_API_KEYS
+        if key
+    )
+)
+
+
+# ============================================================
+# Backward Compatibility
+# ============================================================
+
+LEGACY_GEMINI_API_KEY = os.getenv(
     "GEMINI_API_KEY",
     ""
 ).strip()
 
+if (
+    LEGACY_GEMINI_API_KEY
+    and LEGACY_GEMINI_API_KEY
+    not in GEMINI_API_KEYS
+):
+
+    GEMINI_API_KEYS.insert(
+        0,
+        LEGACY_GEMINI_API_KEY
+    )
+
 
 # ============================================================
 # Gemini Models
-# ============================================================
-#
-# Primary → Secondary → Fallback
-#
-# যদি প্রথম model ব্যর্থ হয়, কোনো 1-second delay থাকবে না।
-# পরের model-এ immediately চেষ্টা করা হবে।
 # ============================================================
 
 GEMINI_MODELS = [
@@ -48,19 +84,18 @@ GEMINI_MODELS = [
     "gemini-3.6-flash",
 ]
 
-
-# Remove duplicates / empty values
 GEMINI_MODELS = list(
     dict.fromkeys(
         model.strip()
         for model in GEMINI_MODELS
-        if model and model.strip()
+        if model
+        and str(model).strip()
     )
 )
 
 
 # ============================================================
-# AI Settings
+# AI Generation Settings
 # ============================================================
 
 AI_TEMPERATURE = 0.7
@@ -69,38 +104,33 @@ AI_MAX_OUTPUT_TOKENS = 65536
 
 
 # ============================================================
-# Retry / Fallback
+# API Key Failover
 # ============================================================
 
-# Retry-এর মাঝে মাত্র 1 millisecond delay
-RETRY_DELAY_SECONDS = 0.001
+# 0.01 second = 10 milliseconds
 
-# একটি model সর্বোচ্চ কতবার চেষ্টা করবে
-MODEL_RETRY_COUNT = 2
+API_KEY_FAILOVER_DELAY_SECONDS = 0.01
+
+# Number of attempts for the same key/model.
+# 1 means immediately move forward after failure.
+
+MODEL_RETRY_COUNT = 1
 
 
 # ============================================================
-# Memory Settings
+# Memory
 # ============================================================
 
 MEMORY_ENABLED = True
 
-# Automatic deletion সম্পূর্ণ বন্ধ
 MEMORY_AUTO_DELETE = False
 
-# কোনো fixed limit নেই
 MEMORY_MAX_MESSAGES = None
 
 MEMORY_MAX_CONVERSATIONS = None
 
 MEMORY_MAX_ENTRIES = None
 
-
-# ============================================================
-# Message Settings
-# ============================================================
-
-# কোনো fixed message limit নেই
 MESSAGE_LIMIT = None
 
 MESSAGE_MAX_WORDS = None
@@ -109,7 +139,7 @@ MESSAGE_AUTO_TRUNCATE = False
 
 
 # ============================================================
-# Server Settings
+# Flask
 # ============================================================
 
 DEBUG = False
@@ -127,20 +157,27 @@ def validate_config():
 
     errors = []
 
-    if not GEMINI_API_KEY:
+
+    if not GEMINI_API_KEYS:
+
         errors.append(
-            "GEMINI_API_KEY is not configured."
+            "No Gemini API key is configured."
         )
 
+
     if not GEMINI_MODELS:
+
         errors.append(
             "No Gemini models are configured."
         )
 
+
     if PORT <= 0 or PORT > 65535:
+
         errors.append(
             "Invalid server port."
         )
+
 
     if errors:
 
@@ -151,5 +188,6 @@ def validate_config():
                 for error in errors
             )
         )
+
 
     return True
