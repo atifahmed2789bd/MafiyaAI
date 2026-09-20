@@ -1,5 +1,3 @@
-# backend/chat.py
-
 from typing import Any, Dict, Optional
 
 from answer_builder import AnswerBuilder
@@ -14,7 +12,7 @@ from memory import (
 # ============================================================
 # MafiyaAI Chat Controller
 # ============================================================
-
+#
 # Flow:
 #
 # User Message
@@ -23,7 +21,7 @@ from memory import (
 #      ↓
 # Answer Builder
 #      ↓
-# Conversation Context
+# Complete Prompt
 #      ↓
 # AI
 #      ↓
@@ -33,7 +31,7 @@ from memory import (
 #      ↓
 # Response
 #
-# Answer Builder remains in a separate file.
+# All AI instructions/prompts are handled by AnswerBuilder.
 #
 # No fixed message limit.
 # No automatic conversation deletion.
@@ -111,13 +109,15 @@ def send_message(
             "Message cannot be empty."
         )
 
+
     # --------------------------------------------------------
-    # Conversation
+    # Ensure conversation exists
     # --------------------------------------------------------
 
     conversation_id = _ensure_conversation(
         conversation_id
     )
+
 
     # --------------------------------------------------------
     # Generate AI response
@@ -129,8 +129,9 @@ def send_message(
         metadata=metadata
     )
 
+
     # --------------------------------------------------------
-    # Get saved conversation
+    # Get updated conversation
     # --------------------------------------------------------
 
     conversation = get_conversation(
@@ -140,6 +141,7 @@ def send_message(
     user_message = None
     assistant_message = None
 
+
     if conversation:
 
         messages = conversation.get(
@@ -147,22 +149,34 @@ def send_message(
             []
         )
 
-        # Find the latest user and assistant messages.
-        for item in reversed(messages):
+
+        # Search backwards for the latest
+        # user and assistant messages.
+
+        for item in reversed(
+            messages
+        ):
+
+            role = item.get(
+                "role"
+            )
+
 
             if (
                 user_message is None
-                and item.get("role") == "user"
+                and role == "user"
             ):
 
                 user_message = item
 
+
             elif (
                 assistant_message is None
-                and item.get("role") == "assistant"
+                and role == "assistant"
             ):
 
                 assistant_message = item
+
 
             if (
                 user_message is not None
@@ -170,6 +184,7 @@ def send_message(
             ):
 
                 break
+
 
     # --------------------------------------------------------
     # Return result
@@ -193,7 +208,7 @@ def send_message(
 
 
 # ============================================================
-# Send Message From Voice
+# Send Voice Message
 # ============================================================
 
 def send_voice_message(
@@ -217,6 +232,7 @@ def send_voice_message(
             "Recognized voice text is empty."
         )
 
+
     return send_message(
         message=recognized_text,
         conversation_id=conversation_id,
@@ -234,6 +250,9 @@ def get_chat_context(
     conversation_id: str
 ) -> str:
 
+    if not conversation_id:
+        return ""
+
     return build_context(
         conversation_id
     )
@@ -247,9 +266,29 @@ def chat_health_check() -> Dict[str, Any]:
 
     try:
 
-        result = AnswerBuilder.generate_answer(
+        # ----------------------------------------------------
+        # Health check directly uses the AI engine.
+        #
+        # This avoids storing "OK" inside user memory.
+        # ----------------------------------------------------
+
+        from ai import generate_ai_response
+
+        result = generate_ai_response(
             message="Reply with exactly: OK"
         )
+
+
+        if not result:
+
+            return {
+                "success": False,
+                "ai": False,
+                "response": None,
+                "error":
+                    "AI returned an empty response."
+            }
+
 
         return {
             "success": True,
@@ -257,6 +296,7 @@ def chat_health_check() -> Dict[str, Any]:
             "response": result,
             "error": None
         }
+
 
     except Exception as error:
 
@@ -266,3 +306,16 @@ def chat_health_check() -> Dict[str, Any]:
             "response": None,
             "error": str(error)
         }
+
+
+# ============================================================
+# Public Exports
+# ============================================================
+
+__all__ = [
+    "new_chat",
+    "send_message",
+    "send_voice_message",
+    "get_chat_context",
+    "chat_health_check",
+]
