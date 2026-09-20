@@ -10,7 +10,6 @@ save_long_term_memory,
 )
 
 class AnswerBuilder:
-
 _initialized = False
 
 @classmethod
@@ -18,7 +17,6 @@ def initialize(
     cls,
     context: Any = None,
 ) -> None:
-
     if cls._initialized:
         return
 
@@ -55,16 +53,12 @@ def build(
     try:
         cls.initialize()
 
-        if user_message is None:
-            user_message = ""
+        user_message = str(
+            user_message or ""
+        ).strip()
 
-        user_message = str(user_message).strip()
-
-        if attachments is None:
-            attachments = []
-
-        if metadata is None:
-            metadata = {}
+        attachments = attachments or []
+        metadata = metadata or {}
 
         if not user_message and not attachments:
             error = "User message and attachments are empty."
@@ -91,7 +85,6 @@ def build(
         return answer
 
     except Exception as error:
-
         error_message = cls.safe_error(error)
 
         cls._send_error(
@@ -113,31 +106,24 @@ def generate_answer(
 
     cls.initialize()
 
-    if message is None:
-        message = ""
+    message = str(
+        message or ""
+    ).strip()
 
-    message = str(message).strip()
-
-    if attachments is None:
-        attachments = []
-
-    if metadata is None:
-        metadata = {}
+    attachments = attachments or []
+    metadata = metadata or {}
 
     conversation_context = ""
 
     if conversation_id:
-
         try:
             conversation_context = build_context(
                 conversation_id
             )
-
         except Exception:
             conversation_context = ""
 
     if not prompt.strip():
-
         prompt = cls.build_prompt(
             message=message,
             conversation_context=conversation_context,
@@ -154,7 +140,9 @@ def generate_answer(
             "AI returned an empty answer."
         )
 
-    answer = str(answer).strip()
+    answer = str(
+        answer
+    ).strip()
 
     if not answer:
         raise RuntimeError(
@@ -164,7 +152,6 @@ def generate_answer(
     if conversation_id:
 
         if message:
-
             input_metadata = {
                 "input_type": "text"
             }
@@ -194,8 +181,7 @@ def build_prompt(
     attachments: Optional[List[Any]] = None,
 ) -> str:
 
-    if attachments is None:
-        attachments = []
+    attachments = attachments or []
 
     prompt_parts = []
 
@@ -515,7 +501,9 @@ readability.
 """.strip()
 )
 
-    return "\n\n".join(prompt_parts)
+    return "\n\n".join(
+        prompt_parts
+    )
 
 @staticmethod
 def format_attachments(
@@ -566,7 +554,9 @@ def format_attachments(
                 f"{str(attachment)}"
             )
 
-    return "\n\n".join(result)
+    return "\n\n".join(
+        result
+    )
 
 @classmethod
 def save_memory(
@@ -586,7 +576,9 @@ def get_memory(
     key: Optional[str] = None,
 ):
 
-    return get_long_term_memory(key)
+    return get_long_term_memory(
+        key
+    )
 
 @staticmethod
 def _send_success(
@@ -598,14 +590,11 @@ def _send_success(
         return
 
     try:
-
         callback(
             answer,
             None,
         )
-
     except Exception:
-
         pass
 
 @staticmethod
@@ -618,14 +607,11 @@ def _send_error(
         return
 
     try:
-
         callback(
             None,
             error,
         )
-
     except Exception:
-
         pass
 
 @staticmethod
@@ -636,7 +622,9 @@ def safe_error(
     if error is None:
         return "Unknown error."
 
-    message = str(error)
+    message = str(
+        error
+    )
 
     if not message.strip():
         return type(error).__name__
@@ -656,11 +644,15 @@ def __init__(
     self._attachments = attachments or []
     self._conversation_id = conversation_id
 
-def get_message(self) -> str:
+def get_message(
+    self,
+) -> str:
 
     return self._message
 
-def get_attachments(self) -> List[Any]:
+def get_attachments(
+    self,
+) -> List[Any]:
 
     return self._attachments
 
