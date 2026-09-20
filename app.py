@@ -1,14 +1,16 @@
 # backend/app.py
 
+import json
 import os
 
-from flask import Flask, jsonify, request
+from flask import Flask, Response, jsonify, request, stream_with_context
 from flask_cors import CORS
 
 from chat import (
     chat_health_check,
     new_chat,
     send_message,
+    stream_message,
     send_voice_message,
 )
 
@@ -126,7 +128,36 @@ def create_new_chat():
 
 
 # ============================================================
-# Send Text Message
+# Send Text Message - STREAMING
+# ============================================================
+#
+# Client sends:
+#
+# {
+#     "message": "...",
+#     "conversation_id": "...",
+#     "metadata": {...}
+# }
+#
+#
+# Server sends SSE events:
+#
+# event: start
+# data: {"success":true,...}
+#
+# event: chunk
+# data: {"text":"Hello"}
+#
+# event: chunk
+# data: {"text":" Boss"}
+#
+# event: chunk
+# data: {"text":" 👑"}
+#
+# event: done
+# data: {"success":true,...}
+#
+# The client can display every chunk immediately.
 # ============================================================
 
 @app.route(
@@ -153,6 +184,11 @@ def chat_message():
             "metadata"
         )
 
+
+        # ----------------------------------------------------
+        # Validate message
+        # ----------------------------------------------------
+
         if message is None:
 
             return jsonify({
@@ -160,6 +196,22 @@ def chat_message():
                 "error":
                     "message is required."
             }), 400
+
+
+        if not str(
+            message
+        ).strip():
+
+            return jsonify({
+                "success": False,
+                "error":
+                    "message cannot be empty."
+            }), 400
+
+
+        # ----------------------------------------------------
+        # Validate metadata
+        # ----------------------------------------------------
 
         if metadata is not None:
 
@@ -174,15 +226,136 @@ def chat_message():
                         "metadata must be an object."
                 }), 400
 
-        result = send_message(
-            message=message,
-            conversation_id=conversation_id,
-            metadata=metadata
+
+        # ----------------------------------------------------
+        # Create streaming generator
+        # ----------------------------------------------------
+
+        @stream_with_context
+        def generate():
+
+            try:
+
+                # =================================================
+                # START EVENT
+                # =================================================
+
+                yield (
+                    "event: start\n"
+                    "data: "
+                    + json.dumps(
+                        {
+                            "success": True,
+                            "streaming": True,
+                        },
+                        ensure_ascii=False
+                    )
+                    + "\n\n"
+                )
+
+
+                # =================================================
+                # AI STREAM
+                # =================================================
+
+                for chunk in stream_message(
+                    message=message,
+                    conversation_id=conversation_id,
+                    metadata=metadata
+                ):
+
+                    if not chunk:
+                        continue
+
+
+                    # ---------------------------------------------
+                    # Send chunk immediately.
+                    # ---------------------------------------------
+
+                    yield (
+                        "event: chunk\n"
+                        "data: "
+                        + json.dumps(
+                            {
+                                "text": str(
+                                    chunk
+                                )
+                            },
+                            ensure_ascii=False
+                        )
+                        + "\n\n"
+                    )
+
+
+                # =================================================
+                # DONE EVENT
+                # =================================================
+
+                yield (
+                    "event: done\n"
+                    "data: "
+                    + json.dumps(
+                        {
+                            "success": True,
+                            "streaming": False,
+                        },
+                        ensure_ascii=False
+                    )
+                    + "\n\n"
+                )
+
+
+            except Exception as error:
+
+                # =================================================
+                # STREAM ERROR
+                # =================================================
+
+                yield (
+                    "event: error\n"
+                    "data: "
+                    + json.dumps(
+                        {
+                            "success": False,
+                            "error": str(
+                                error
+                            )
+                        },
+                        ensure_ascii=False
+                    )
+                    + "\n\n"
+                )
+
+
+        # --------------------------------------------------------
+        # Streaming HTTP Response
+        # --------------------------------------------------------
+
+        response = Response(
+            generate(),
+            mimetype="text/event-stream"
         )
 
-        return jsonify(
-            result
-        )
+
+        # --------------------------------------------------------
+        # Important headers for real-time streaming.
+        # --------------------------------------------------------
+
+        response.headers[
+            "Cache-Control"
+        ] = "no-cache"
+
+        response.headers[
+            "Connection"
+        ] = "keep-alive"
+
+        response.headers[
+            "X-Accel-Buffering"
+        ] = "no"
+
+
+        return response
+
 
     except ValueError as error:
 
@@ -190,6 +363,7 @@ def chat_message():
             "success": False,
             "error": str(error)
         }), 400
+
 
     except Exception as error:
 

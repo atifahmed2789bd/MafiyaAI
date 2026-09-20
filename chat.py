@@ -1,8 +1,9 @@
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Iterator, Optional
 
 from answer_builder import AnswerBuilder
 
 from memory import (
+    add_message,
     build_context,
     create_conversation,
     get_conversation,
@@ -13,25 +14,43 @@ from memory import (
 # MafiyaAI Chat Controller
 # ============================================================
 #
-# Flow:
+# Normal flow:
 #
 # User Message
 #      ↓
 # Chat Controller
 #      ↓
-# Answer Builder
+# AnswerBuilder
 #      ↓
 # Complete Prompt
 #      ↓
 # AI
 #      ↓
-# AI Response
+# Complete Response
 #      ↓
 # Memory
-#      ↓
-# Response
 #
-# All AI instructions/prompts are handled by AnswerBuilder.
+#
+# Streaming flow:
+#
+# User Message
+#      ↓
+# Chat Controller
+#      ↓
+# AnswerBuilder
+#      ↓
+# Complete Prompt
+#      ↓
+# Gemini Streaming
+#      ↓
+# Chunk 1 → App
+# Chunk 2 → App
+# Chunk 3 → App
+# ...
+#      ↓
+# Complete Response
+#      ↓
+# Memory
 #
 # No fixed message limit.
 # No automatic conversation deletion.
@@ -80,7 +99,7 @@ def _ensure_conversation(
 
 
 # ============================================================
-# Send Message
+# Send Normal Message
 # ============================================================
 
 def send_message(
@@ -120,7 +139,7 @@ def send_message(
 
 
     # --------------------------------------------------------
-    # Generate AI response
+    # Generate complete AI response
     # --------------------------------------------------------
 
     ai_response = AnswerBuilder.generate_answer(
@@ -150,8 +169,8 @@ def send_message(
         )
 
 
-        # Search backwards for the latest
-        # user and assistant messages.
+        # Search backwards for latest
+        # user + assistant messages.
 
         for item in reversed(
             messages
@@ -205,6 +224,211 @@ def send_message(
         "response":
             ai_response
     }
+
+
+# ============================================================
+# STREAM MESSAGE
+#
+# This is the new streaming function.
+#
+# It yields Gemini chunks immediately instead of waiting
+# for the complete response.
+# ============================================================
+
+def stream_message(
+    message: str,
+    conversation_id: Optional[str] = None,
+    metadata: Optional[Dict[str, Any]] = None
+) -> Iterator[str]:
+
+    # --------------------------------------------------------
+    # Validate message
+    # --------------------------------------------------------
+
+    if message is None:
+
+        raise ValueError(
+            "Message cannot be empty."
+        )
+
+    message = str(
+        message
+    ).strip()
+
+    if not message:
+
+        raise ValueError(
+            "Message cannot be empty."
+        )
+
+
+    # --------------------------------------------------------
+    # Ensure conversation exists
+    # --------------------------------------------------------
+
+    conversation_id = _ensure_conversation(
+        conversation_id
+    )
+
+
+    # --------------------------------------------------------
+    # Import streaming AI engine
+    # --------------------------------------------------------
+
+    from ai import stream_ai_response
+
+
+    # --------------------------------------------------------
+    # Build the same prompt used by AnswerBuilder
+    # --------------------------------------------------------
+
+    prompt = None
+
+
+    try:
+
+        prompt = AnswerBuilder.build_prompt(
+            message=message,
+            conversation_id=conversation_id,
+            metadata=metadata
+        )
+
+    except TypeError:
+
+        # ----------------------------------------------------
+        # Compatibility fallback.
+        #
+        # If build_prompt() has a different signature,
+        # use conversation context directly.
+        # ----------------------------------------------------
+
+        try:
+
+            conversation_context = build_context(
+                conversation_id
+            )
+
+        except Exception:
+
+            conversation_context = ""
+
+
+        if conversation_context:
+
+            prompt = (
+                f"{conversation_context}\n\n"
+                f"Current user message:\n"
+                f"{message}"
+            )
+
+        else:
+
+            prompt = message
+
+
+    # --------------------------------------------------------
+    # Collect the complete streamed response.
+    #
+    # Memory is saved only AFTER streaming finishes.
+    # --------------------------------------------------------
+
+    complete_response_parts = []
+
+
+    try:
+
+        for chunk in stream_ai_response(
+            message=message,
+            conversation_context=prompt
+        ):
+
+            if not chunk:
+                continue
+
+
+            chunk = str(
+                chunk
+            )
+
+
+            complete_response_parts.append(
+                chunk
+            )
+
+
+            # =================================================
+            # IMPORTANT
+            #
+            # Yield immediately.
+            #
+            # Do NOT wait for the complete response.
+            # =================================================
+
+            yield chunk
+
+
+    except Exception:
+
+        # Re-raise so app.py can send a proper stream error.
+        raise
+
+
+    # --------------------------------------------------------
+    # Complete response
+    # --------------------------------------------------------
+
+    complete_response = "".join(
+        complete_response_parts
+    ).strip()
+
+
+    if not complete_response:
+
+        raise RuntimeError(
+            "AI returned an empty streaming response."
+        )
+
+
+    # --------------------------------------------------------
+    # Save memory AFTER successful stream
+    # --------------------------------------------------------
+
+    try:
+
+        add_message(
+            conversation_id=conversation_id,
+            role="user",
+            content=message,
+            metadata=metadata
+        )
+
+    except TypeError:
+
+        # Compatibility with memory.py implementations
+        # that don't accept metadata.
+
+        add_message(
+            conversation_id,
+            "user",
+            message
+        )
+
+
+    try:
+
+        add_message(
+            conversation_id=conversation_id,
+            role="assistant",
+            content=complete_response
+        )
+
+    except TypeError:
+
+        add_message(
+            conversation_id,
+            "assistant",
+            complete_response
+        )
 
 
 # ============================================================
@@ -315,6 +539,7 @@ def chat_health_check() -> Dict[str, Any]:
 __all__ = [
     "new_chat",
     "send_message",
+    "stream_message",
     "send_voice_message",
     "get_chat_context",
     "chat_health_check",
