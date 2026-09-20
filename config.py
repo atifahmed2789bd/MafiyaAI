@@ -26,14 +26,12 @@ PORT = int(
 # Gemini API Keys
 # ============================================================
 #
-# Supported:
 # GEMINI_API_KEY_1
 # GEMINI_API_KEY_2
 # ...
 # GEMINI_API_KEY_100
 #
-# Up to 100 API keys can be configured.
-# Empty variables are automatically ignored.
+# Empty variables are ignored.
 # ============================================================
 
 GEMINI_API_KEYS = [
@@ -44,6 +42,8 @@ GEMINI_API_KEYS = [
     for index in range(1, 101)
 ]
 
+
+# Remove empty and duplicate keys.
 GEMINI_API_KEYS = list(
     dict.fromkeys(
         key
@@ -54,13 +54,14 @@ GEMINI_API_KEYS = list(
 
 
 # ============================================================
-# Backward Compatibility
+# Legacy API Key Support
 # ============================================================
 
 LEGACY_GEMINI_API_KEY = os.getenv(
     "GEMINI_API_KEY",
     ""
 ).strip()
+
 
 if (
     LEGACY_GEMINI_API_KEY
@@ -84,9 +85,10 @@ GEMINI_MODELS = [
     "gemini-3.6-flash",
 ]
 
+
 GEMINI_MODELS = list(
     dict.fromkeys(
-        model.strip()
+        str(model).strip()
         for model in GEMINI_MODELS
         if model
         and str(model).strip()
@@ -107,12 +109,7 @@ AI_MAX_OUTPUT_TOKENS = 65536
 # API Key Failover
 # ============================================================
 
-# 0.01 second = 10 milliseconds
-
 API_KEY_FAILOVER_DELAY_SECONDS = 0.01
-
-# Number of attempts for the same key/model.
-# 1 means immediately move forward after failure.
 
 MODEL_RETRY_COUNT = 1
 
