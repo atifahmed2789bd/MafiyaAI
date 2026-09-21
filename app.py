@@ -1,9 +1,14 @@
-# backend/app.py
-
 import json
 import os
 
-from flask import Flask, Response, jsonify, request, stream_with_context
+from flask import (
+    Flask,
+    Response,
+    jsonify,
+    request,
+    stream_with_context,
+)
+
 from flask_cors import CORS
 
 from chat import (
@@ -32,8 +37,34 @@ app = Flask(__name__)
 
 app.config["JSON_AS_ASCII"] = False
 
-# Allow requests from the MafiyaAI Android WebView.
 CORS(app)
+
+
+# ============================================================
+# JSON Helper
+# ============================================================
+
+def json_data(data):
+    return json.dumps(
+        data,
+        ensure_ascii=False,
+        separators=(",", ":")
+    )
+
+
+# ============================================================
+# SSE Helper
+# ============================================================
+
+def sse_event(
+    event: str,
+    data
+) -> str:
+
+    return (
+        f"event: {event}\n"
+        f"data: {json_data(data)}\n\n"
+    )
 
 
 # ============================================================
@@ -67,20 +98,30 @@ def health():
                 "success",
                 False
             ),
+
             "server": True,
+
             "ai": result.get(
                 "ai",
                 False
             ),
+
             "response": result.get(
                 "response"
             ),
+
             "error": result.get(
                 "error"
             )
         })
 
     except Exception as error:
+
+        print(
+            "HEALTH ERROR:",
+            repr(error),
+            flush=True
+        )
 
         return jsonify({
             "success": False,
@@ -121,6 +162,12 @@ def create_new_chat():
 
     except Exception as error:
 
+        print(
+            "CHAT NEW ERROR:",
+            repr(error),
+            flush=True
+        )
+
         return jsonify({
             "success": False,
             "error": str(error)
@@ -128,36 +175,7 @@ def create_new_chat():
 
 
 # ============================================================
-# Send Text Message - STREAMING
-# ============================================================
-#
-# Client sends:
-#
-# {
-#     "message": "...",
-#     "conversation_id": "...",
-#     "metadata": {...}
-# }
-#
-#
-# Server sends SSE events:
-#
-# event: start
-# data: {"success":true,...}
-#
-# event: chunk
-# data: {"text":"Hello"}
-#
-# event: chunk
-# data: {"text":" Boss"}
-#
-# event: chunk
-# data: {"text":" 👑"}
-#
-# event: done
-# data: {"success":true,...}
-#
-# The client can display every chunk immediately.
+# Send Text Message - SSE STREAMING
 # ============================================================
 
 @app.route(
@@ -198,9 +216,12 @@ def chat_message():
             }), 400
 
 
-        if not str(
+        message = str(
             message
-        ).strip():
+        ).strip()
+
+
+        if not message:
 
             return jsonify({
                 "success": False,
@@ -213,44 +234,43 @@ def chat_message():
         # Validate metadata
         # ----------------------------------------------------
 
-        if metadata is not None:
+        if metadata is None:
 
-            if not isinstance(
-                metadata,
-                dict
-            ):
+            metadata = {}
 
-                return jsonify({
-                    "success": False,
-                    "error":
-                        "metadata must be an object."
-                }), 400
+        elif not isinstance(
+            metadata,
+            dict
+        ):
+
+            return jsonify({
+                "success": False,
+                "error":
+                    "metadata must be an object."
+            }), 400
 
 
         # ----------------------------------------------------
-        # Create streaming generator
+        # Streaming generator
         # ----------------------------------------------------
 
         @stream_with_context
         def generate():
 
+            stream_completed = False
+
             try:
 
                 # =================================================
-                # START EVENT
+                # START
                 # =================================================
 
-                yield (
-                    "event: start\n"
-                    "data: "
-                    + json.dumps(
-                        {
-                            "success": True,
-                            "streaming": True,
-                        },
-                        ensure_ascii=False
-                    )
-                    + "\n\n"
+                yield sse_event(
+                    "start",
+                    {
+                        "success": True,
+                        "streaming": True,
+                    }
                 )
 
 
@@ -264,86 +284,119 @@ def chat_message():
                     metadata=metadata
                 ):
 
+                    if chunk is None:
+                        continue
+
+                    chunk = str(
+                        chunk
+                    )
+
                     if not chunk:
                         continue
 
 
                     # ---------------------------------------------
-                    # Send chunk immediately.
+                    # Send only actual AI text
                     # ---------------------------------------------
 
-                    yield (
-                        "event: chunk\n"
-                        "data: "
-                        + json.dumps(
-                            {
-                                "text": str(
-                                    chunk
-                                )
-                            },
-                            ensure_ascii=False
-                        )
-                        + "\n\n"
-                    )
-
-
-                # =================================================
-                # DONE EVENT
-                # =================================================
-
-                yield (
-                    "event: done\n"
-                    "data: "
-                    + json.dumps(
+                    yield sse_event(
+                        "chunk",
                         {
-                            "success": True,
-                            "streaming": False,
-                        },
-                        ensure_ascii=False
+                            "text": chunk
+                        }
                     )
-                    + "\n\n"
+
+
+                # =================================================
+                # STREAM COMPLETED
+                # =================================================
+
+                stream_completed = True
+
+                yield sse_event(
+                    "done",
+                    {
+                        "success": True,
+                        "streaming": False,
+                    }
                 )
+
+
+            except GeneratorExit:
+
+                # -------------------------------------------------
+                # Client manually stopped/disconnected.
+                # -------------------------------------------------
+
+                return
 
 
             except Exception as error:
 
-                # =================================================
-                # STREAM ERROR
-                # =================================================
+                print(
+                    "CHAT STREAM ERROR:",
+                    repr(error),
+                    flush=True
+                )
 
-                yield (
-                    "event: error\n"
-                    "data: "
-                    + json.dumps(
+
+                # -------------------------------------------------
+                # Send error to frontend
+                # -------------------------------------------------
+
+                try:
+
+                    yield sse_event(
+                        "error",
                         {
                             "success": False,
                             "error": str(
                                 error
                             )
-                        },
-                        ensure_ascii=False
+                        }
                     )
-                    + "\n\n"
-                )
+
+                except GeneratorExit:
+
+                    return
+
+
+            finally:
+
+                if not stream_completed:
+
+                    pass
 
 
         # --------------------------------------------------------
-        # Streaming HTTP Response
+        # SSE HTTP Response
         # --------------------------------------------------------
 
         response = Response(
             generate(),
-            mimetype="text/event-stream"
+            status=200,
+            content_type=(
+                "text/event-stream; "
+                "charset=utf-8"
+            )
         )
 
 
         # --------------------------------------------------------
-        # Important headers for real-time streaming.
+        # Streaming headers
         # --------------------------------------------------------
 
         response.headers[
             "Cache-Control"
+        ] = "no-cache, no-store, must-revalidate"
+
+        response.headers[
+            "Pragma"
         ] = "no-cache"
+
+        response.headers[
+            "Expires"
+        ] = "0"
 
         response.headers[
             "Connection"
@@ -352,6 +405,10 @@ def chat_message():
         response.headers[
             "X-Accel-Buffering"
         ] = "no"
+
+        response.headers[
+            "Access-Control-Allow-Origin"
+        ] = "*"
 
 
         return response
@@ -366,6 +423,12 @@ def chat_message():
 
 
     except Exception as error:
+
+        print(
+            "CHAT MESSAGE ERROR:",
+            repr(error),
+            flush=True
+        )
 
         return jsonify({
             "success": False,
@@ -397,6 +460,7 @@ def chat_voice():
             "conversation_id"
         )
 
+
         if recognized_text is None:
 
             return jsonify({
@@ -405,9 +469,13 @@ def chat_voice():
                     "text is required."
             }), 400
 
-        if not str(
+
+        recognized_text = str(
             recognized_text
-        ).strip():
+        ).strip()
+
+
+        if not recognized_text:
 
             return jsonify({
                 "success": False,
@@ -415,14 +483,17 @@ def chat_voice():
                     "text cannot be empty."
             }), 400
 
+
         result = send_voice_message(
             recognized_text=recognized_text,
             conversation_id=conversation_id
         )
 
+
         return jsonify(
             result
         )
+
 
     except ValueError as error:
 
@@ -431,7 +502,14 @@ def chat_voice():
             "error": str(error)
         }), 400
 
+
     except Exception as error:
+
+        print(
+            "VOICE ERROR:",
+            repr(error),
+            flush=True
+        )
 
         return jsonify({
             "success": False,
@@ -492,10 +570,12 @@ def conversation(
                     "Conversation not found."
             }), 404
 
+
         return jsonify({
             "success": True,
             "conversation": result
         })
+
 
     except Exception as error:
 
@@ -522,6 +602,7 @@ def memory_search():
             ""
         )
 
+
         if not query.strip():
 
             return jsonify({
@@ -530,15 +611,18 @@ def memory_search():
                     "Search query is required."
             }), 400
 
+
         results = search_memory(
             query
         )
+
 
         return jsonify({
             "success": True,
             "query": query,
             "results": results
         })
+
 
     except Exception as error:
 
@@ -567,6 +651,7 @@ def memory_stats():
             "stats": stats
         })
 
+
     except Exception as error:
 
         return jsonify({
@@ -591,14 +676,17 @@ def get_long_term():
             "key"
         )
 
+
         result = get_long_term_memory(
             key
         )
+
 
         return jsonify({
             "success": True,
             "memory": result
         })
+
 
     except Exception as error:
 
@@ -624,6 +712,7 @@ def save_long_term():
             silent=True
         ) or {}
 
+
         key = data.get(
             "key"
         )
@@ -632,6 +721,7 @@ def save_long_term():
             "value"
         )
 
+
         if key is None:
 
             return jsonify({
@@ -639,6 +729,7 @@ def save_long_term():
                 "error":
                     "key is required."
             }), 400
+
 
         if not str(
             key
@@ -650,10 +741,12 @@ def save_long_term():
                     "key cannot be empty."
             }), 400
 
+
         save_long_term_memory(
             key=key,
             value=value
         )
+
 
         return jsonify({
             "success": True,
@@ -661,12 +754,14 @@ def save_long_term():
                 "Long-term memory saved."
         })
 
+
     except ValueError as error:
 
         return jsonify({
             "success": False,
             "error": str(error)
         }), 400
+
 
     except Exception as error:
 
@@ -696,6 +791,12 @@ def not_found(error):
 
 @app.errorhandler(Exception)
 def internal_error(error):
+
+    print(
+        "GLOBAL ERROR:",
+        repr(error),
+        flush=True
+    )
 
     return jsonify({
         "success": False,

@@ -14,44 +14,39 @@ from memory import (
 # MafiyaAI Chat Controller
 # ============================================================
 #
-# Normal flow:
-#
-# User Message
-#      ↓
+# Normal:
+# User
+#   ↓
 # Chat Controller
-#      ↓
+#   ↓
 # AnswerBuilder
-#      ↓
+#   ↓
 # Complete Prompt
-#      ↓
-# AI
-#      ↓
-# Complete Response
-#      ↓
+#   ↓
+# Gemini
+#   ↓
+# Response
+#   ↓
 # Memory
 #
 #
-# Streaming flow:
-#
-# User Message
-#      ↓
+# Streaming:
+# User
+#   ↓
 # Chat Controller
-#      ↓
-# Memory Context
-#      ↓
+#   ↓
 # AnswerBuilder
-#      ↓
+#   ↓
 # Complete Prompt
-#      ↓
+#   ↓
 # Gemini Streaming
-#      ↓
-# Chunk 1 → App
-# Chunk 2 → App
-# Chunk 3 → App
-# ...
-#      ↓
+#   ↓
+# Chunks
+#   ↓
+# App
+#   ↓
 # Complete Response
-#      ↓
+#   ↓
 # Memory
 #
 # No fixed message limit.
@@ -101,6 +96,40 @@ def _ensure_conversation(
 
 
 # ============================================================
+# Get Safe Conversation Context
+# ============================================================
+
+def _get_conversation_context(
+    conversation_id: str
+) -> str:
+
+    try:
+
+        context = build_context(
+            conversation_id
+        )
+
+        if context is None:
+            return ""
+
+        return str(
+            context
+        ).strip()
+
+    except Exception as error:
+
+        # Context failure should not prevent a new message
+        # from reaching AnswerBuilder.
+        print(
+            "MafiyaAI memory context warning:",
+            str(error),
+            flush=True
+        )
+
+        return ""
+
+
+# ============================================================
 # Send Normal Message
 # ============================================================
 
@@ -132,7 +161,15 @@ def send_message(
 
 
     # --------------------------------------------------------
-    # Ensure conversation exists
+    # Metadata
+    # --------------------------------------------------------
+
+    if metadata is None:
+        metadata = {}
+
+
+    # --------------------------------------------------------
+    # Ensure conversation
     # --------------------------------------------------------
 
     conversation_id = _ensure_conversation(
@@ -141,23 +178,55 @@ def send_message(
 
 
     # --------------------------------------------------------
-    # Generate complete AI response
+    # Generate answer through AnswerBuilder
     #
-    # AnswerBuilder handles:
+    # AnswerBuilder is responsible for:
     #
-    # - Memory context
-    # - System instructions
-    # - Language rules
-    # - Formatting rules
-    # - User message
+    # - MafiyaAI identity
+    # - Creator information
+    # - Website
+    # - Language
+    # - Formatting
+    # - Memory
+    # - Complete prompt
     # - Gemini request
     # --------------------------------------------------------
 
-    ai_response = AnswerBuilder.generate_answer(
-        message=message,
-        conversation_id=conversation_id,
-        metadata=metadata
-    )
+    try:
+
+        ai_response = AnswerBuilder.generate_answer(
+            message=message,
+            conversation_id=conversation_id,
+            metadata=metadata
+        )
+
+    except Exception as error:
+
+        raise RuntimeError(
+            "MafiyaAI failed to generate an answer: "
+            f"{error}"
+        ) from error
+
+
+    # --------------------------------------------------------
+    # Validate AI response
+    # --------------------------------------------------------
+
+    if ai_response is None:
+
+        raise RuntimeError(
+            "AI server returned an empty response."
+        )
+
+    ai_response = str(
+        ai_response
+    ).strip()
+
+    if not ai_response:
+
+        raise RuntimeError(
+            "AI server returned an empty response."
+        )
 
 
     # --------------------------------------------------------
@@ -179,18 +248,30 @@ def send_message(
             []
         )
 
+        if not isinstance(
+            messages,
+            list
+        ):
+            messages = []
 
-        # Search backwards for latest
-        # user + assistant messages.
+
+        # ----------------------------------------------------
+        # Find latest user + assistant messages
+        # ----------------------------------------------------
 
         for item in reversed(
             messages
         ):
 
+            if not isinstance(
+                item,
+                dict
+            ):
+                continue
+
             role = item.get(
                 "role"
             )
-
 
             if (
                 user_message is None
@@ -199,14 +280,12 @@ def send_message(
 
                 user_message = item
 
-
             elif (
                 assistant_message is None
                 and role == "assistant"
             ):
 
                 assistant_message = item
-
 
             if (
                 user_message is not None
@@ -222,40 +301,15 @@ def send_message(
 
     return {
         "success": True,
-
-        "conversation_id":
-            conversation_id,
-
-        "user_message":
-            user_message,
-
-        "assistant_message":
-            assistant_message,
-
-        "response":
-            ai_response
+        "conversation_id": conversation_id,
+        "user_message": user_message,
+        "assistant_message": assistant_message,
+        "response": ai_response
     }
 
 
 # ============================================================
 # STREAM MESSAGE
-#
-# IMPORTANT:
-#
-# The streaming path MUST use the exact same AnswerBuilder
-# prompt construction as the normal path.
-#
-# We do NOT call build_prompt() with conversation_id or
-# metadata because those are NOT parameters of build_prompt().
-#
-# Correct:
-#
-# build_context()
-#       ↓
-# AnswerBuilder.build_prompt()
-#       ↓
-# stream_ai_response()
-#
 # ============================================================
 
 def stream_message(
@@ -286,7 +340,15 @@ def stream_message(
 
 
     # --------------------------------------------------------
-    # Ensure conversation exists
+    # Metadata
+    # --------------------------------------------------------
+
+    if metadata is None:
+        metadata = {}
+
+
+    # --------------------------------------------------------
+    # Ensure conversation
     # --------------------------------------------------------
 
     conversation_id = _ensure_conversation(
@@ -302,21 +364,14 @@ def stream_message(
 
 
     # --------------------------------------------------------
-    # Get conversation context
-    #
-    # This is the same context used by
-    # AnswerBuilder.generate_answer().
+    # Get memory context
     # --------------------------------------------------------
 
-    try:
-
-        conversation_context = build_context(
+    conversation_context = (
+        _get_conversation_context(
             conversation_id
         )
-
-    except Exception:
-
-        conversation_context = ""
+    )
 
 
     # --------------------------------------------------------
@@ -326,31 +381,37 @@ def stream_message(
     #
     # build_prompt() accepts:
     #
-    # message
-    # conversation_context
-    # attachments
+    #   message
+    #   conversation_context
+    #   attachments
     #
-    # It does NOT accept:
+    # Do NOT pass:
     #
-    # conversation_id
-    # metadata
-    #
-    # Therefore the previous implementation caused
-    # TypeError and then silently bypassed AnswerBuilder.
+    #   conversation_id
+    #   metadata
     # --------------------------------------------------------
 
-    prompt = AnswerBuilder.build_prompt(
-        message=message,
-        conversation_context=conversation_context,
-        attachments=[]
-    )
+    try:
+
+        prompt = AnswerBuilder.build_prompt(
+            message=message,
+            conversation_context=conversation_context,
+            attachments=[]
+        )
+
+    except Exception as error:
+
+        raise RuntimeError(
+            "AnswerBuilder failed to build the AI prompt: "
+            f"{error}"
+        ) from error
 
 
     # --------------------------------------------------------
-    # Safety validation
+    # Validate prompt
     # --------------------------------------------------------
 
-    if not prompt:
+    if prompt is None:
 
         raise RuntimeError(
             "AnswerBuilder returned an empty prompt."
@@ -368,9 +429,7 @@ def stream_message(
 
 
     # --------------------------------------------------------
-    # Collect complete streamed response.
-    #
-    # Memory is saved only AFTER streaming finishes.
+    # Collect complete streamed response
     # --------------------------------------------------------
 
     complete_response_parts = []
@@ -383,27 +442,23 @@ def stream_message(
             conversation_context=prompt
         ):
 
-            if not chunk:
+            if chunk is None:
                 continue
-
 
             chunk = str(
                 chunk
             )
 
+            if not chunk:
+                continue
 
             complete_response_parts.append(
                 chunk
             )
 
-
-            # =================================================
-            # IMPORTANT
-            #
-            # Send each Gemini chunk immediately.
-            #
-            # Do NOT wait for the complete response.
-            # =================================================
+            # ------------------------------------------------
+            # Immediately send chunk to app
+            # ------------------------------------------------
 
             yield chunk
 
@@ -411,25 +466,22 @@ def stream_message(
     except GeneratorExit:
 
         # ----------------------------------------------------
-        # Client disconnected / stream cancelled.
+        # Client manually stopped/disconnected.
         #
-        # Do not save incomplete AI response.
+        # Do not save incomplete response.
         # ----------------------------------------------------
 
         return
 
-
     except Exception:
 
-        # ----------------------------------------------------
-        # Let app.py handle the streaming error.
-        # ----------------------------------------------------
-
+        # Let app.py convert the exception into its
+        # appropriate SSE error response.
         raise
 
 
     # --------------------------------------------------------
-    # Complete response
+    # Build complete response
     # --------------------------------------------------------
 
     complete_response = "".join(
@@ -440,12 +492,14 @@ def stream_message(
     if not complete_response:
 
         raise RuntimeError(
-            "AI returned an empty streaming response."
+            "AI server returned an empty streaming response."
         )
 
 
     # --------------------------------------------------------
-    # Save user message AFTER successful stream
+    # Save user message
+    #
+    # Only after successful AI streaming.
     # --------------------------------------------------------
 
     try:
@@ -459,9 +513,6 @@ def stream_message(
 
     except TypeError:
 
-        # Compatibility with memory.py implementations
-        # that don't accept metadata.
-
         add_message(
             conversation_id,
             "user",
@@ -470,7 +521,7 @@ def stream_message(
 
 
     # --------------------------------------------------------
-    # Save assistant response AFTER successful stream
+    # Save assistant message
     # --------------------------------------------------------
 
     try:
@@ -536,7 +587,7 @@ def get_chat_context(
     if not conversation_id:
         return ""
 
-    return build_context(
+    return _get_conversation_context(
         conversation_id
     )
 
@@ -549,17 +600,27 @@ def chat_health_check() -> Dict[str, Any]:
 
     try:
 
-        # ----------------------------------------------------
-        # Health check directly uses the AI engine.
-        #
-        # This avoids storing "OK" inside user memory.
-        # ----------------------------------------------------
-
         from ai import generate_ai_response
 
         result = generate_ai_response(
             message="Reply with exactly: OK"
         )
+
+
+        if result is None:
+
+            return {
+                "success": False,
+                "ai": False,
+                "response": None,
+                "error":
+                    "AI returned an empty response."
+            }
+
+
+        result = str(
+            result
+        ).strip()
 
 
         if not result:
