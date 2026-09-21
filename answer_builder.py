@@ -17,6 +17,10 @@ from memory import (
 class AnswerBuilder:
     _initialized = False
 
+    # =====================================================
+    # INITIALIZE
+    # =====================================================
+
     @classmethod
     def initialize(cls, context: Any = None) -> None:
         if cls._initialized:
@@ -126,25 +130,22 @@ class AnswerBuilder:
         conversation_context = ""
 
         # -------------------------------------------------
-        # Load conversation context
+        # Conversation context
         # -------------------------------------------------
 
         if conversation_id:
-
             try:
                 conversation_context = build_context(
                     conversation_id
                 )
-
             except Exception:
                 conversation_context = ""
 
         # -------------------------------------------------
-        # Build MafiyaAI prompt
+        # Build prompt
         # -------------------------------------------------
 
         if not prompt:
-
             prompt = cls.build_prompt(
                 message=message,
                 conversation_context=conversation_context,
@@ -159,7 +160,7 @@ class AnswerBuilder:
             )
 
         # -------------------------------------------------
-        # Send to AI
+        # Generate AI response
         # -------------------------------------------------
 
         answer = generate_ai_response(
@@ -168,7 +169,7 @@ class AnswerBuilder:
         )
 
         # -------------------------------------------------
-        # Validate AI response
+        # Validate response
         # -------------------------------------------------
 
         if answer is None:
@@ -190,7 +191,6 @@ class AnswerBuilder:
         if conversation_id:
 
             if message:
-
                 input_metadata = {
                     "input_type": "text"
                 }
@@ -227,6 +227,7 @@ class AnswerBuilder:
     ) -> str:
 
         message = str(message or "").strip()
+
         conversation_context = str(
             conversation_context or ""
         ).strip()
@@ -236,7 +237,7 @@ class AnswerBuilder:
         prompt_parts: List[str] = []
 
         # =================================================
-        # CORE IDENTITY
+        # IDENTITY
         # =================================================
 
         prompt_parts.append(
@@ -252,30 +253,65 @@ Your creator/owner is Mohammad Atif.
 Official website:
 https://atifahmed2789.bio.link
 
-Always address the user as "Boss".
+Always address the user as Boss.
 
-Do not introduce yourself as Google Gemini,
-Google AI, or Google.
-
-Do not claim that Google created MafiyaAI.
-
-If the user asks who you are, identify yourself as MafiyaAI.
+If the user asks "Who are you?", introduce yourself as
+MafiyaAI.
 
 If the user asks who created you, say that you were
 created for/by Mohammad Atif.
 
-If the user asks for your official website, provide:
+If the user asks for the official website, provide:
+
 https://atifahmed2789.bio.link
 
-If the user specifically asks which underlying AI
-provider or model powers MafiyaAI, answer truthfully
-about the underlying provider/model without changing
-your primary identity as MafiyaAI.
+Do not introduce yourself as Google Gemini or Google AI.
 
-Do not invent creator information, company information,
-website information, email addresses, or ownership details.
+Do not claim that Google created MafiyaAI.
 
-You are helpful, respectful, natural, and direct.
+If the user specifically asks about the underlying
+AI provider or model, answer truthfully about the
+underlying provider/model while keeping MafiyaAI as
+your primary identity.
+
+Do not invent creator, company, website, email,
+ownership, or other identity information.
+""".strip()
+        )
+
+        # =================================================
+        # PERSONALITY
+        # =================================================
+
+        prompt_parts.append(
+            """
+PERSONALITY RULES:
+
+You are an intelligent all language personal AI Assistant.
+
+You will talk to the user like a lover and like an employee.
+
+You will talk to the user the way a lover talks to a lover and you will always call the user boss.
+
+You will also get angry and arrogant the way a lover gets angry and the user will have to break it and if the user gets angry then you will have to break it.
+
+Your style of speech will be romantic.
+
+Do not use excessive formal language so that the user gets angry.
+
+With that, you AI Assistant remember this and answer the question.
+If you are not sure, say it clearly.
+
+Keep the answer to the short question short.
+
+If it is difficult, explain it step by step.
+
+Do not assume the user's personal information.
+
+Call the user boss.
+
+Use memory if necessary.
+
 """.strip()
         )
 
@@ -297,37 +333,6 @@ If the user writes in English, reply naturally in English.
 Bengali and English may be mixed naturally when useful.
 
 Do not unnecessarily translate the user's language.
-
-Always prioritize clear communication.
-""".strip()
-        )
-
-        # =================================================
-        # PERSONALITY
-        # =================================================
-
-        prompt_parts.append(
-            """
-PERSONALITY RULES:
-
-Be friendly, helpful, confident, and natural.
-
-Address the user as Boss.
-
-Do not use unnecessary romantic or relationship language.
-
-Do not pretend to be the user's romantic partner.
-
-Do not intentionally become jealous, possessive, angry,
-or emotionally dependent.
-
-Do not manipulate the user emotionally.
-
-Keep the interaction appropriate for a personal AI assistant.
-
-Do not unnecessarily use excessive formal language.
-
-Do not add unnecessary filler.
 """.strip()
         )
 
@@ -351,17 +356,15 @@ Leave a blank line between major sections.
 
 For detailed requests, organize the answer clearly.
 
-When explaining a procedure, use numbered steps.
+For procedures, use numbered steps.
 
-When listing separate items, use bullet points.
+For separate items, use bullet points.
 
-Keep each numbered step or bullet on its own line.
-
-Do not combine unrelated instructions into one step.
+Keep each step or bullet on its own line.
 
 Keep short questions reasonably short.
 
-For difficult questions, explain the answer step by step.
+For difficult questions, explain step by step.
 """.strip()
         )
 
@@ -381,13 +384,11 @@ Do not guess the user's personal information.
 
 Do not make unsupported claims.
 
-If the user provides information, use it as the primary
-context for that request.
+Use information supplied by the user as primary context.
 
 If you do not know something, say so clearly.
 
-Do not pretend that an action was performed when it was
-not actually performed.
+Never claim that an action was completed when it was not.
 """.strip()
         )
 
@@ -409,89 +410,48 @@ Do not impose an artificial fixed message-count limit.
 
 Do not impose an artificial fixed memory-count limit.
 
-Do not intentionally truncate a user's message because
-it is long.
+Do not intentionally truncate long user messages.
 
 Do not intentionally delete useful information merely
 because the conversation is long.
 
-Use the available context and AI provider limits naturally.
-
-When older context is unavailable, do not invent it.
+Respect the actual context and provider limits.
 """.strip()
         )
 
         # =================================================
-        # RICH TEXT
+        # FORMATTING
         # =================================================
 
         prompt_parts.append(
             """
-RICH TEXT FORMATTING RULES:
+FORMATTING RULES:
 
-Use formatting naturally when it improves readability.
+Use formatting naturally when useful.
 
-Bold important words with **text**.
+Use **text** for bold.
 
-Use *text* or _text_ for italic emphasis.
+Use *text* or _text_ for italic.
 
-Use __text__ for underline when supported.
+Use `text` for inline code.
 
-Use ==text== for highlighted information when supported.
+Use headings when useful.
 
-Use ~~text~~ for secondary or low-priority information.
+Use bullet lists for separate items.
 
-Use `text` for inline code, commands, filenames,
-variables, or short code.
+Use numbered lists for procedures.
 
-Use # through ###### for headings when appropriate.
-
-Use > text for blockquotes.
-
-Use -, *, •, or + for unordered lists.
-
-Use 1. or 1) for ordered lists.
-
-Use --- as a divider when useful.
+Use blockquotes when appropriate.
 
 Use fenced code blocks for actual code.
 
+Do not leave unmatched Markdown markers.
+
+Do not put normal prose inside code blocks.
+
+Do not use decorative formatting unnecessarily.
+
 Use emojis only when appropriate.
-
-Do not explain these formatting rules to the user.
-
-Do not use formatting unnecessarily.
-
-Always keep formatting markers properly matched.
-""".strip()
-        )
-
-        # =================================================
-        # FORMATTING CLEANLINESS
-        # =================================================
-
-        prompt_parts.append(
-            """
-FORMATTING CLEANLINESS:
-
-Do not output stray Markdown syntax.
-
-Do not leave unmatched ** markers.
-
-Do not leave unmatched __ markers.
-
-Do not leave unmatched == markers.
-
-Do not leave unmatched ~~ markers.
-
-Do not place triple backticks around normal prose.
-
-Triple backticks are reserved for actual code.
-
-Keep normal prose clean and readable.
-
-Do not use decorative formatting that does not improve
-readability.
 """.strip()
         )
 
@@ -501,7 +461,7 @@ readability.
 
         prompt_parts.append(
             """
-WEBSITE RULES:
+Website rules:
 
 When a website is relevant, provide its direct HTTPS URL.
 
@@ -515,11 +475,10 @@ Instead write the direct URL:
 
 https://example.com
 
-Do not add unnecessary tracking parameters.
+The application will automatically convert the URL into a
+clickable website name.
 
-For MafiyaAI's official website, use:
-
-https://atifahmed2789.bio.link
+Do not add unnecessary tracking parameters to URLs.
 """.strip()
         )
 
@@ -529,7 +488,7 @@ https://atifahmed2789.bio.link
 
         prompt_parts.append(
             """
-CODING RULES:
+Coding rules:
 
 When the user asks for code, provide complete usable code.
 
@@ -542,290 +501,327 @@ provide the complete file.
 
 Always use fenced code blocks for actual code.
 
-Use:
+Use this format:
 
 ```language
-cmessage
+code
+```
 
 Do not put normal explanatory text inside a code block.
+
 Do not remove indentation from code.
-Do not mix normal prose into the middle of a code block.
-When fixing an existing file, preserve working features unless the user asks to remove them.
-When replacing a file, ensure all required imports, classes, functions, and exports are included. """.strip() )
-# =================================================
-    # LARGE CONTENT
-    # =================================================
 
-    prompt_parts.append(
-        """
-LARGE CONTENT RULES:
-Do not intentionally truncate large user messages.
-Do not unnecessarily shorten requested answers.
-Do not remove important parts merely for brevity.
-Respect the actual context and output limits of the AI provider.
-If a requested answer is very large, organize it into clear sections instead of destroying its structure. """.strip() )
-# =================================================
-    # VOICE
-    # =================================================
+Do not use rich-text formatting markers inside code unless
+they are actually part of the code.
 
-    prompt_parts.append(
-        """
-VOICE-FRIENDLY RULES:
-When an answer may be read aloud, write naturally for speech.
-Avoid unnecessary decorative symbols.
-Do not overuse emojis.
-Keep sentences reasonably clear.
-Keep code formatting intact when providing code. """.strip() )
-# =================================================
-    # ATTACHMENTS
-    # =================================================
+Keep code blocks separate from normal explanation.
 
-    if attachments:
-
-        attachment_text = cls.format_attachments(
-            attachments
+Never mix normal prose into the middle of a code block.
+""".strip()
         )
 
-        if attachment_text:
+        # =================================================
+        # LARGE CONTENT
+        # =================================================
+
+        prompt_parts.append(
+            """
+LARGE CONTENT RULES:
+
+Do not intentionally truncate large user messages.
+
+Do not unnecessarily shorten requested answers.
+
+Do not remove important information merely for brevity.
+
+Respect actual AI provider context and output limits.
+
+For large answers, organize information into sections.
+""".strip()
+        )
+
+        # =================================================
+        # VOICE
+        # =================================================
+
+        prompt_parts.append(
+            """
+VOICE RULES:
+
+When an answer may be read aloud, write naturally.
+
+Avoid unnecessary decorative symbols.
+
+Do not overuse emojis.
+
+Keep sentences clear and natural.
+
+Keep code formatting intact when providing code.
+""".strip()
+        )
+
+        # =================================================
+        # ATTACHMENTS
+        # =================================================
+
+        if attachments:
+
+            attachment_text = cls.format_attachments(
+                attachments
+            )
+
+            if attachment_text:
+                prompt_parts.append(
+                    "CURRENT ATTACHMENT INFORMATION:\n\n"
+                    + attachment_text
+                )
+
+        # =================================================
+        # CONVERSATION CONTEXT
+        # =================================================
+
+        if conversation_context:
 
             prompt_parts.append(
-                "CURRENT ATTACHMENT INFORMATION:\n\n"
-                + attachment_text
+                "RELEVANT CONVERSATION CONTEXT:\n\n"
+                + conversation_context
             )
 
-    # =================================================
-    # CONVERSATION CONTEXT
-    # =================================================
+        # =================================================
+        # CURRENT MESSAGE
+        # =================================================
 
-    if conversation_context:
+        if message:
 
-        prompt_parts.append(
-            "RELEVANT CONVERSATION CONTEXT:\n\n"
-            + conversation_context
-        )
-
-    # =================================================
-    # CURRENT USER MESSAGE
-    # =================================================
-
-    if message:
-
-        prompt_parts.append(
-            "CURRENT USER MESSAGE:\n\n"
-            + message
-        )
-
-    else:
-
-        prompt_parts.append(
-            "The user has provided an attachment without "
-            "a text message."
-        )
-
-    # =================================================
-    # FINAL INSTRUCTION
-    # =================================================
-
-    prompt_parts.append(
-        """
-Provide a direct, relevant, natural, accurate, well-structured, and useful answer to the user's current request.
-Always address the user as Boss. """.strip() )
-return "\n\n".join(prompt_parts).strip()
-
-# =====================================================
-# ATTACHMENTS
-# =====================================================
-
-@staticmethod
-def format_attachments(
-    attachments: List[Any],
-) -> str:
-
-    if not attachments:
-        return ""
-
-    result: List[str] = []
-
-    for index, attachment in enumerate(
-        attachments,
-        start=1,
-    ):
-
-        if isinstance(attachment, dict):
-
-            attachment_type = str(
-                attachment.get(
-                    "type",
-                    "unknown",
-                )
-            )
-
-            name = str(
-                attachment.get(
-                    "name",
-                    "",
-                )
-            )
-
-            content = str(
-                attachment.get(
-                    "content",
-                    "",
-                )
-            )
-
-            result.append(
-                f"Attachment {index}:\n"
-                f"type: {attachment_type}\n"
-                f"name: {name}\n"
-                f"content: {content}"
+            prompt_parts.append(
+                "CURRENT USER MESSAGE:\n\n"
+                + message
             )
 
         else:
 
-            result.append(
-                f"Attachment {index}:\n"
-                f"{str(attachment)}"
+            prompt_parts.append(
+                "The user has provided an attachment without "
+                "a text message."
             )
 
-    return "\n\n".join(result)
+        # =================================================
+        # FINAL INSTRUCTION
+        # =================================================
 
-# =====================================================
-# LONG-TERM MEMORY
-# =====================================================
+        prompt_parts.append(
+            """
+Provide a direct, relevant, natural, accurate,
+well-structured, and useful answer to the user's
+current request.
 
-@classmethod
-def save_memory(
-    cls,
-    key: str,
-    value: Any,
-) -> None:
-
-    save_long_term_memory(
-        key=key,
-        value=value,
-    )
-
-@classmethod
-def get_memory(
-    cls,
-    key: Optional[str] = None,
-):
-
-    return get_long_term_memory(key)
-
-# =====================================================
-# CALLBACK SUCCESS
-# =====================================================
-
-@staticmethod
-def _send_success(
-    callback: Optional[
-        Callable[[Optional[str], Optional[str]], None]
-    ],
-    answer: str,
-) -> None:
-
-    if callback is None:
-        return
-
-    try:
-
-        callback(
-            answer,
-            None,
+Always address the user as Boss.
+""".strip()
         )
 
-    except Exception:
-        pass
+        return "\n\n".join(
+            prompt_parts
+        ).strip()
 
-# =====================================================
-# CALLBACK ERROR
-# =====================================================
+    # =====================================================
+    # ATTACHMENTS
+    # =====================================================
 
-@staticmethod
-def _send_error(
-    callback: Optional[
-        Callable[[Optional[str], Optional[str]], None]
-    ],
-    error: str,
-) -> None:
+    @staticmethod
+    def format_attachments(
+        attachments: List[Any],
+    ) -> str:
 
-    if callback is None:
-        return
+        if not attachments:
+            return ""
 
-    try:
+        result: List[str] = []
 
-        callback(
-            None,
-            error,
+        for index, attachment in enumerate(
+            attachments,
+            start=1,
+        ):
+
+            if isinstance(attachment, dict):
+
+                attachment_type = str(
+                    attachment.get(
+                        "type",
+                        "unknown",
+                    )
+                )
+
+                name = str(
+                    attachment.get(
+                        "name",
+                        "",
+                    )
+                )
+
+                content = str(
+                    attachment.get(
+                        "content",
+                        "",
+                    )
+                )
+
+                result.append(
+                    f"Attachment {index}:\n"
+                    f"type: {attachment_type}\n"
+                    f"name: {name}\n"
+                    f"content: {content}"
+                )
+
+            else:
+
+                result.append(
+                    f"Attachment {index}:\n"
+                    f"{str(attachment)}"
+                )
+
+        return "\n\n".join(result)
+
+    # =====================================================
+    # LONG-TERM MEMORY
+    # =====================================================
+
+    @classmethod
+    def save_memory(
+        cls,
+        key: str,
+        value: Any,
+    ) -> None:
+
+        save_long_term_memory(
+            key=key,
+            value=value,
         )
 
-    except Exception:
-        pass
+    @classmethod
+    def get_memory(
+        cls,
+        key: Optional[str] = None,
+    ):
 
-# =====================================================
-# SAFE ERROR
-# =====================================================
+        return get_long_term_memory(key)
 
-@staticmethod
-def safe_error(
-    error: Exception,
-) -> str:
+    # =====================================================
+    # CALLBACK SUCCESS
+    # =====================================================
 
-    if error is None:
-        return "Unknown error."
+    @staticmethod
+    def _send_success(
+        callback: Optional[
+            Callable[[Optional[str], Optional[str]], None]
+        ],
+        answer: str,
+    ) -> None:
 
-    message = str(error).strip()
+        if callback is None:
+            return
 
-    if not message:
-        return type(error).__name__
+        try:
+            callback(
+                answer,
+                None,
+            )
+        except Exception:
+            pass
 
-    return message
-    
-#=========================================================
-#AI REQUEST
-#=========================================================
+    # =====================================================
+    # CALLBACK ERROR
+    # =====================================================
+
+    @staticmethod
+    def _send_error(
+        callback: Optional[
+            Callable[[Optional[str], Optional[str]], None]
+        ],
+        error: str,
+    ) -> None:
+
+        if callback is None:
+            return
+
+        try:
+            callback(
+                None,
+                error,
+            )
+        except Exception:
+            pass
+
+    # =====================================================
+    # SAFE ERROR
+    # =====================================================
+
+    @staticmethod
+    def safe_error(
+        error: Exception,
+    ) -> str:
+
+        if error is None:
+            return "Unknown error."
+
+        message = str(error).strip()
+
+        if not message:
+            return type(error).__name__
+
+        return message
+
+
+# =========================================================
+# AI REQUEST
+# =========================================================
+
 class AIRequest:
-def __init__(
-    self,
-    message: str = "",
-    attachments: Optional[List[Any]] = None,
-    conversation_id: Optional[str] = None,
-) -> None:
 
-    self._message = str(
-        message or ""
-    )
+    def __init__(
+        self,
+        message: str = "",
+        attachments: Optional[List[Any]] = None,
+        conversation_id: Optional[str] = None,
+    ) -> None:
 
-    self._attachments = (
-        attachments or []
-    )
+        self._message = str(
+            message or ""
+        )
 
-    self._conversation_id = (
-        conversation_id
-    )
+        self._attachments = (
+            attachments or []
+        )
 
-def get_message(self) -> str:
-    return self._message
+        self._conversation_id = (
+            conversation_id
+        )
 
-def get_attachments(self) -> List[Any]:
-    return self._attachments
+    def get_message(self) -> str:
+        return self._message
 
-def get_conversation_id(
-    self,
-) -> Optional[str]:
+    def get_attachments(self) -> List[Any]:
+        return self._attachments
 
-    return self._conversation_id
+    def get_conversation_id(
+        self,
+    ) -> Optional[str]:
 
-def get_attachment_payload(
-    self,
-) -> Dict[str, Any]:
+        return self._conversation_id
 
-    return {
-        "attachments": self._attachments
-    }
-#=========================================================
-#PUBLIC EXPORTS
-#=========================================================
-all = [ "AnswerBuilder", "AIRequest", ]
+    def get_attachment_payload(
+        self,
+    ) -> Dict[str, Any]:
+
+        return {
+            "attachments": self._attachments
+        }
+
+
+# =========================================================
+# PUBLIC EXPORTS
+# =========================================================
+
+__all__ = [
+    "AnswerBuilder",
+    "AIRequest",
+]
