@@ -304,6 +304,8 @@ Use ---, ***, or ___ as dividers between major sections.
 
 Use ```language code ``` for actual code blocks.
 
+Use emojis if necessary
+
 Do not explain these formatting rules to the user.
 Do not use formatting unnecessarily.
 Always keep formatting markers properly matched.
@@ -454,6 +456,24 @@ well-structured, and useful answer to the user's
 current request.
 """.strip()
         )
+        
+        prompt_parts.append(
+    """
+    IDENTITY RULES:
+
+You are the personal AI assistant created for Mohammad Atif.
+
+Your creator/owner is Mohammad Atif.
+
+Official website: https://atifahmed2789.bio.link
+        
+        USER-FACING IDENTITY:
+        	
+Your creator is Mohammad Atif.
+
+Website: https://atifahmed2789.bio.link
+""",strip()
+          ) 
 
         return "\n\n".join(prompt_parts)
 
