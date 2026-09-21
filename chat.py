@@ -37,6 +37,8 @@ from memory import (
 #      ↓
 # Chat Controller
 #      ↓
+# Memory Context
+#      ↓
 # AnswerBuilder
 #      ↓
 # Complete Prompt
@@ -140,6 +142,15 @@ def send_message(
 
     # --------------------------------------------------------
     # Generate complete AI response
+    #
+    # AnswerBuilder handles:
+    #
+    # - Memory context
+    # - System instructions
+    # - Language rules
+    # - Formatting rules
+    # - User message
+    # - Gemini request
     # --------------------------------------------------------
 
     ai_response = AnswerBuilder.generate_answer(
@@ -229,10 +240,22 @@ def send_message(
 # ============================================================
 # STREAM MESSAGE
 #
-# This is the new streaming function.
+# IMPORTANT:
 #
-# It yields Gemini chunks immediately instead of waiting
-# for the complete response.
+# The streaming path MUST use the exact same AnswerBuilder
+# prompt construction as the normal path.
+#
+# We do NOT call build_prompt() with conversation_id or
+# metadata because those are NOT parameters of build_prompt().
+#
+# Correct:
+#
+# build_context()
+#       ↓
+# AnswerBuilder.build_prompt()
+#       ↓
+# stream_ai_response()
+#
 # ============================================================
 
 def stream_message(
@@ -279,55 +302,73 @@ def stream_message(
 
 
     # --------------------------------------------------------
-    # Build the same prompt used by AnswerBuilder
+    # Get conversation context
+    #
+    # This is the same context used by
+    # AnswerBuilder.generate_answer().
     # --------------------------------------------------------
-
-    prompt = None
-
 
     try:
 
-        prompt = AnswerBuilder.build_prompt(
-            message=message,
-            conversation_id=conversation_id,
-            metadata=metadata
+        conversation_context = build_context(
+            conversation_id
         )
 
-    except TypeError:
+    except Exception:
 
-        # ----------------------------------------------------
-        # Compatibility fallback.
-        #
-        # If build_prompt() has a different signature,
-        # use conversation context directly.
-        # ----------------------------------------------------
-
-        try:
-
-            conversation_context = build_context(
-                conversation_id
-            )
-
-        except Exception:
-
-            conversation_context = ""
-
-
-        if conversation_context:
-
-            prompt = (
-                f"{conversation_context}\n\n"
-                f"Current user message:\n"
-                f"{message}"
-            )
-
-        else:
-
-            prompt = message
+        conversation_context = ""
 
 
     # --------------------------------------------------------
-    # Collect the complete streamed response.
+    # Build COMPLETE AnswerBuilder prompt
+    #
+    # IMPORTANT:
+    #
+    # build_prompt() accepts:
+    #
+    # message
+    # conversation_context
+    # attachments
+    #
+    # It does NOT accept:
+    #
+    # conversation_id
+    # metadata
+    #
+    # Therefore the previous implementation caused
+    # TypeError and then silently bypassed AnswerBuilder.
+    # --------------------------------------------------------
+
+    prompt = AnswerBuilder.build_prompt(
+        message=message,
+        conversation_context=conversation_context,
+        attachments=[]
+    )
+
+
+    # --------------------------------------------------------
+    # Safety validation
+    # --------------------------------------------------------
+
+    if not prompt:
+
+        raise RuntimeError(
+            "AnswerBuilder returned an empty prompt."
+        )
+
+    prompt = str(
+        prompt
+    ).strip()
+
+    if not prompt:
+
+        raise RuntimeError(
+            "AnswerBuilder returned an empty prompt."
+        )
+
+
+    # --------------------------------------------------------
+    # Collect complete streamed response.
     #
     # Memory is saved only AFTER streaming finishes.
     # --------------------------------------------------------
@@ -359,7 +400,7 @@ def stream_message(
             # =================================================
             # IMPORTANT
             #
-            # Yield immediately.
+            # Send each Gemini chunk immediately.
             #
             # Do NOT wait for the complete response.
             # =================================================
@@ -367,9 +408,23 @@ def stream_message(
             yield chunk
 
 
+    except GeneratorExit:
+
+        # ----------------------------------------------------
+        # Client disconnected / stream cancelled.
+        #
+        # Do not save incomplete AI response.
+        # ----------------------------------------------------
+
+        return
+
+
     except Exception:
 
-        # Re-raise so app.py can send a proper stream error.
+        # ----------------------------------------------------
+        # Let app.py handle the streaming error.
+        # ----------------------------------------------------
+
         raise
 
 
@@ -390,7 +445,7 @@ def stream_message(
 
 
     # --------------------------------------------------------
-    # Save memory AFTER successful stream
+    # Save user message AFTER successful stream
     # --------------------------------------------------------
 
     try:
@@ -413,6 +468,10 @@ def stream_message(
             message
         )
 
+
+    # --------------------------------------------------------
+    # Save assistant response AFTER successful stream
+    # --------------------------------------------------------
 
     try:
 
