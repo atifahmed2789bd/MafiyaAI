@@ -1,5 +1,3 @@
-# config.py
-
 import os
 
 
@@ -24,14 +22,6 @@ PORT = int(
 
 # ============================================================
 # Gemini API Keys
-# ============================================================
-#
-# GEMINI_API_KEY_1
-# GEMINI_API_KEY_2
-# ...
-# GEMINI_API_KEY_100
-#
-# Empty variables are ignored.
 # ============================================================
 
 GEMINI_API_KEYS = [
@@ -65,8 +55,7 @@ LEGACY_GEMINI_API_KEY = os.getenv(
 
 if (
     LEGACY_GEMINI_API_KEY
-    and LEGACY_GEMINI_API_KEY
-    not in GEMINI_API_KEYS
+    and LEGACY_GEMINI_API_KEY not in GEMINI_API_KEYS
 ):
 
     GEMINI_API_KEYS.insert(
@@ -78,11 +67,20 @@ if (
 # ============================================================
 # Gemini Models
 # ============================================================
+#
+# Ordered fallback:
+#
+# 3.8 -> 3.7 -> 3.6 -> 3.5
+#
+# If one model returns a temporary 503/429/etc.,
+# ai.py can move to the next model.
+# ============================================================
 
 GEMINI_MODELS = [
     "gemini-3.8-flash",
     "gemini-3.7-flash",
     "gemini-3.6-flash",
+    "gemini-3.5-flash",
 ]
 
 
@@ -102,16 +100,19 @@ GEMINI_MODELS = list(
 
 AI_TEMPERATURE = 0.7
 
+# Gemini 3.8 Flash supports up to 65,536 output tokens.
 AI_MAX_OUTPUT_TOKENS = 65536
 
 
 # ============================================================
-# API Key Failover
+# Failover / Retry
 # ============================================================
 
-API_KEY_FAILOVER_DELAY_SECONDS = 0.01
+# Small delay between attempts.
+API_KEY_FAILOVER_DELAY_SECONDS = 0.4
 
-MODEL_RETRY_COUNT = 1
+# Number of attempts for the same model/key.
+MODEL_RETRY_COUNT = 2
 
 
 # ============================================================
@@ -154,13 +155,11 @@ def validate_config():
 
     errors = []
 
-
     if not GEMINI_API_KEYS:
 
         errors.append(
             "No Gemini API key is configured."
         )
-
 
     if not GEMINI_MODELS:
 
@@ -168,13 +167,23 @@ def validate_config():
             "No Gemini models are configured."
         )
 
-
     if PORT <= 0 or PORT > 65535:
 
         errors.append(
             "Invalid server port."
         )
 
+    if AI_MAX_OUTPUT_TOKENS <= 0:
+
+        errors.append(
+            "AI_MAX_OUTPUT_TOKENS must be greater than 0."
+        )
+
+    if MODEL_RETRY_COUNT <= 0:
+
+        errors.append(
+            "MODEL_RETRY_COUNT must be greater than 0."
+        )
 
     if errors:
 
@@ -185,6 +194,5 @@ def validate_config():
                 for error in errors
             )
         )
-
 
     return True
